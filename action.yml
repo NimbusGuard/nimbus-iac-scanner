@@ -1,5 +1,5 @@
 name: "NimbusGuard IaC Scan"
-description: "Evaluates Terraform source against NimbusGuard's real control catalog before it's ever deployed (E2.6)."
+description: "Evaluates Terraform/CloudFormation/Bicep source against NimbusGuard's real control catalog before it's ever deployed (E2.6)."
 branding:
   icon: "shield"
   color: "red"
@@ -12,7 +12,7 @@ inputs:
     description: "A NimbusGuard service-account API key with view_findings. Pass this as a secret, never a literal value."
     required: true
   path:
-    description: "Directory to scan for *.tf files."
+    description: "Directory to scan."
     required: false
     default: "."
   min-severity:
@@ -21,6 +21,10 @@ inputs:
     default: ""
   post-pr-comment:
     description: "Post/update a summary comment on the triggering pull request."
+    required: false
+    default: "true"
+  install-bicep:
+    description: "Install the 'bicep' CLI before scanning, so any .bicep files under path are actually evaluated instead of failing the build with 'CLI not found'. Set to 'false' if your own workflow already installs it, or if you have no .bicep files at all."
     required: false
     default: "true"
 
@@ -35,6 +39,18 @@ runs:
     - name: Install nimbus-iac-scanner
       shell: bash
       run: pip install "${{ github.action_path }}"
+
+    # Confirmed live against Microsoft's own current docs (Install Bicep
+    # tools -> Install manually -> Linux) -- the bicep CLI is NOT
+    # bundled with this action, since not every caller has .bicep files
+    # to scan, and this keeps the action itself small.
+    - name: Install bicep CLI
+      if: ${{ inputs.install-bicep == 'true' }}
+      shell: bash
+      run: |
+        curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+        chmod +x ./bicep
+        sudo mv ./bicep /usr/local/bin/bicep
 
     - name: Run scan
       shell: bash

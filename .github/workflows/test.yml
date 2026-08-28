@@ -14,4 +14,12 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt pytest
+      # Real bicep CLI so tests/test_bicep_parser.py's own compile-based
+      # tests actually run here instead of skipping -- same manual-install
+      # method documented in this repo's own action.yml/gitlab template.
+      - name: Install bicep CLI
+        run: |
+          curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x ./bicep
+          sudo mv ./bicep /usr/local/bin/bicep
       - run: python -m pytest -q

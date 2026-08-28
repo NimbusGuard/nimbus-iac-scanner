@@ -83,3 +83,59 @@ def test_post_pr_comment_failure_never_changes_the_exit_code(monkeypatch):
             "--post-pr-comment",
         ])
     assert exit_code == 0
+
+
+def test_collects_and_merges_resources_across_all_3_formats(tmp_path):
+    (tmp_path / "main.tf").write_text('''
+resource "aws_security_group" "tf_sg" {
+  name = "tf-sg"
+}
+''')
+    (tmp_path / "template.json").write_text(
+        '{"Resources": {"CfnBucket": {"Type": "AWS::S3::Bucket", "Properties": {}}}}'
+    )
+    fake_result = GateCheckResult(passed=True, results=[])
+    with patch("nimbus_iac_scanner.cli.run_gate_check", return_value=fake_result) as mock_run:
+        exit_code = main(["--path", str(tmp_path), "--api-url", "https://api.example.com", "--api-key", "k"])
+    assert exit_code == 0
+    sent_resources = mock_run.call_args.args[2]
+    identifiers = {r["identifier"] for r in sent_resources}
+    assert identifiers == {"aws_security_group.tf_sg", "AWS::S3::Bucket.CfnBucket"}
+
+
+def test_a_bicep_cli_not_found_error_exits_2_and_is_never_silently_swallowed(tmp_path, monkeypatch):
+    (tmp_path / "main.bicep").write_text("resource sa 'X' = {}")
+    monkeypatch.setattr("nimbus_iac_scanner.bicep_parser.is_bicep_cli_available", lambda: False)
+    with patch("nimbus_iac_scanner.cli.run_gate_check") as mock_run:
+        exit_code = main(["--path", str(tmp_path), "--api-url", "https://api.example.com", "--api-key", "k"])
+    assert exit_code == 2
+    mock_run.assert_not_called()
+
+
+def test_post_mr_comment_with_no_merge_request_context_never_changes_the_exit_code(monkeypatch):
+    fake_result = GateCheckResult(passed=True, results=[])
+    monkeypatch.delenv("CI_MERGE_REQUEST_IID", raising=False)
+    with patch("nimbus_iac_scanner.cli.run_gate_check", return_value=fake_result):
+        exit_code = main([
+            "--path", FIXTURE_DIR, "--api-url", "https://api.example.com", "--api-key", "k",
+            "--post-mr-comment",
+        ])
+    assert exit_code == 0
+
+
+def test_post_mr_comment_posts_when_a_real_merge_request_context_exists(monkeypatch):
+    fake_result = GateCheckResult(passed=True, results=[])
+    monkeypatch.setenv("CI_MERGE_REQUEST_IID", "9")
+    monkeypatch.setenv("CI_SERVER_URL", "https://gitlab.example.com")
+    monkeypatch.setenv("CI_PROJECT_ID", "42")
+    monkeypatch.setenv("NIMBUS_GITLAB_TOKEN", "tok")
+    with patch("nimbus_iac_scanner.cli.run_gate_check", return_value=fake_result), \
+         patch("nimbus_iac_scanner.cli.post_or_update_mr_comment") as mock_post:
+        exit_code = main([
+            "--path", FIXTURE_DIR, "--api-url", "https://api.example.com", "--api-key", "k",
+            "--post-mr-comment",
+        ])
+    assert exit_code == 0
+    mock_post.assert_called_once()
+    assert mock_post.call_args.args[0] == "https://gitlab.example.com"
+    assert mock_post.call_args.args[2] == 9

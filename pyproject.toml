@@ -10,6 +10,7 @@ requires-python = ">=3.10"
 dependencies = [
     "python-hcl2==4.3.5",
     "requests>=2.31,<3",
+    "PyYAML>=6,<7",
 ]
 
 [project.scripts]

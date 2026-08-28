@@ -13,11 +13,19 @@
 # variables in the customer's own GitLab project settings -- never
 # committed to this file or the customer's own repo.
 #
-# No PR/MR-comment support yet -- a real, disclosed gap (GitHub's own
-# REST API is what this tool's pr_comment.py currently talks to; a
-# GitLab MR-comment equivalent is a natural follow-up, not built this
-# pass). The pipeline still genuinely fails on a real misconfiguration,
-# which is this ficha's own literal "listo cuando" criterion.
+# For MR-comment posting (recommended), also set NIMBUS_GITLAB_TOKEN --
+# a real GitLab Personal or Project Access Token with `api` scope,
+# masked, in the customer's own project CI/CD variables. Deliberately
+# NOT the predefined $CI_JOB_TOKEN -- its own real permission to post
+# arbitrary MR notes isn't reliable across every project setting, so
+# this tool always expects a real token supplied explicitly. Add
+# `--post-mr-comment` to the script line below to enable it once the
+# token is set (only takes effect on a genuine merge-request pipeline;
+# a branch/tag pipeline correctly skips it, never errors).
+#
+# Evaluates Terraform (*.tf), CloudFormation (*.json/*.yaml/*.yml that
+# structurally look like a template), and Bicep (*.bicep, via the real
+# `bicep` CLI, installed below) in one combined pass.
 
 .nimbus-iac-scan:
   stage: test
@@ -27,10 +35,19 @@
     NIMBUS_MIN_SEVERITY: ""
   before_script:
     - pip install "git+https://github.com/NimbusGuard/nimbus-iac-scanner.git@main"
+    # Confirmed live against Microsoft's own current docs (Install Bicep
+    # tools -> Install manually -> Linux) -- needed only if the project
+    # being scanned has real .bicep files; harmless (a small, one-time
+    # download) otherwise.
+    - curl -Lo /usr/local/bin/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+    - chmod +x /usr/local/bin/bicep
   script:
     - |
       ARGS=("--path" "$NIMBUS_IAC_SCAN_PATH")
       if [ -n "$NIMBUS_MIN_SEVERITY" ]; then
         ARGS+=("--min-severity" "$NIMBUS_MIN_SEVERITY")
+      fi
+      if [ -n "$NIMBUS_GITLAB_TOKEN" ]; then
+        ARGS+=("--post-mr-comment")
       fi
       nimbus-iac-scan "${ARGS[@]}"
