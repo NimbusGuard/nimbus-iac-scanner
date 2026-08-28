@@ -1,0 +1,36 @@
+# Include this in a customer's own .gitlab-ci.yml:
+#
+#   include:
+#     - remote: 'https://raw.githubusercontent.com/NimbusGuard/nimbus-iac-scanner/main/gitlab/nimbus-iac-scan.gitlab-ci.yml'
+#
+#   nimbus-iac-scan:
+#     extends: .nimbus-iac-scan
+#     variables:
+#       NIMBUS_IAC_SCAN_PATH: "infra/"        # optional, default "."
+#       NIMBUS_MIN_SEVERITY: "HIGH"            # optional
+#
+# NIMBUS_API_URL/NIMBUS_API_KEY must be set as real, masked CI/CD
+# variables in the customer's own GitLab project settings -- never
+# committed to this file or the customer's own repo.
+#
+# No PR/MR-comment support yet -- a real, disclosed gap (GitHub's own
+# REST API is what this tool's pr_comment.py currently talks to; a
+# GitLab MR-comment equivalent is a natural follow-up, not built this
+# pass). The pipeline still genuinely fails on a real misconfiguration,
+# which is this ficha's own literal "listo cuando" criterion.
+
+.nimbus-iac-scan:
+  stage: test
+  image: python:3.12-slim
+  variables:
+    NIMBUS_IAC_SCAN_PATH: "."
+    NIMBUS_MIN_SEVERITY: ""
+  before_script:
+    - pip install "git+https://github.com/NimbusGuard/nimbus-iac-scanner.git@main"
+  script:
+    - |
+      ARGS=("--path" "$NIMBUS_IAC_SCAN_PATH")
+      if [ -n "$NIMBUS_MIN_SEVERITY" ]; then
+        ARGS+=("--min-severity" "$NIMBUS_MIN_SEVERITY")
+      fi
+      nimbus-iac-scan "${ARGS[@]}"

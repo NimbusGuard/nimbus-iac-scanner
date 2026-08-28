@@ -1,0 +1,53 @@
+name: "NimbusGuard IaC Scan"
+description: "Evaluates Terraform source against NimbusGuard's real control catalog before it's ever deployed (E2.6)."
+branding:
+  icon: "shield"
+  color: "red"
+
+inputs:
+  api-url:
+    description: "Your NimbusGuard API base URL (e.g. https://api.nimbusguard.io/v1)."
+    required: true
+  api-key:
+    description: "A NimbusGuard service-account API key with view_findings. Pass this as a secret, never a literal value."
+    required: true
+  path:
+    description: "Directory to scan for *.tf files."
+    required: false
+    default: "."
+  min-severity:
+    description: "Only fail the build on a FAIL at or above this severity (CRITICAL/HIGH/MEDIUM/LOW/INFORMATIONAL). Default: any FAIL blocks the build."
+    required: false
+    default: ""
+  post-pr-comment:
+    description: "Post/update a summary comment on the triggering pull request."
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install nimbus-iac-scanner
+      shell: bash
+      run: pip install "${{ github.action_path }}"
+
+    - name: Run scan
+      shell: bash
+      env:
+        NIMBUS_API_URL: ${{ inputs.api-url }}
+        NIMBUS_API_KEY: ${{ inputs.api-key }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        ARGS=("--path" "${{ inputs.path }}")
+        if [ -n "${{ inputs.min-severity }}" ]; then
+          ARGS+=("--min-severity" "${{ inputs.min-severity }}")
+        fi
+        if [ "${{ inputs.post-pr-comment }}" = "true" ]; then
+          ARGS+=("--post-pr-comment")
+        fi
+        nimbus-iac-scan "${ARGS[@]}"

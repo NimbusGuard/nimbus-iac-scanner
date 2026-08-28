@@ -1,0 +1,8 @@
+# Pinned deliberately to 4.3.5, not the latest 8.x -- confirmed live
+# that 8.x changed its own output shape (embedded literal quote
+# characters in every dict key/string value, a __is_block__ marker on
+# every block) in a way that breaks the standard, widely-documented
+# shape this tool's parser is built against. See
+# nimbus_iac_scanner/terraform_parser.py's own docstring.
+python-hcl2==4.3.5
+requests>=2.31,<3

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nimbus-iac-scanner"
+version = "0.1.0"
+description = "Shift-left IaC scanning CLI for NimbusGuard (E2.6) -- evaluates Terraform source against nimbus_app's own real control catalog before it's ever deployed."
+requires-python = ">=3.10"
+dependencies = [
+    "python-hcl2==4.3.5",
+    "requests>=2.31,<3",
+]
+
+[project.scripts]
+nimbus-iac-scan = "nimbus_iac_scanner.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["nimbus_iac_scanner*"]
