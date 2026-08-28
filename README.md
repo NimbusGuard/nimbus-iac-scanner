@@ -61,13 +61,18 @@ real misconfiguration.
 
 ## What's covered today
 
-A deliberately narrow, real first slice — not an attempt at exhaustive
+A deliberately curated, real slice — not an attempt at exhaustive
 coverage:
 
 | Terraform resource | nimbus_app control(s) | Notes |
 |---|---|---|
 | `aws_s3_bucket` + `aws_s3_bucket_public_access_block` | `NG-AWS-S3-001` (public access) | The public-access-block resource must reference the bucket (by Terraform reference or by its literal bucket name) for this to evaluate — a bucket with no such resource in your Terraform is honestly `NOT_EVALUATED`, never a guessed PASS or FAIL. |
-| `aws_security_group` (inline `ingress {}` blocks) | `NG-AWS-EC2-001`/`002` (SSH/RDP exposure) and any other security_group-targeted control | The newer, decomposed `aws_vpc_security_group_ingress_rule` resource (AWS provider v5+) is not mapped yet — see Known gaps. |
+| `aws_security_group` (inline `ingress {}` blocks + the newer, decomposed `aws_vpc_security_group_ingress_rule`) | `NG-AWS-EC2-001`/`002` (SSH/RDP exposure) and any other security_group-targeted control | Both rule shapes merge into the same evaluated rule set. A standalone `aws_vpc_security_group_ingress_rule` referencing a security group NOT declared in the same Terraform (e.g. a data-sourced or externally-managed one) is skipped — see Known gaps. |
+| `aws_db_instance` | `NG-AWS-RDS-001` (public accessibility), `NG-AWS-RDS-002` (storage encryption) | `publicly_accessible`/`storage_encrypted` both default to `false` when omitted (Terraform's own confirmed, documented default), never a guess. |
+| `aws_kms_key` | `NG-AWS-KMS-001` (key rotation) | A Terraform-declared key is always treated as customer-managed (a structural fact — AWS-managed keys are never created as a resource). `customer_master_key_spec` defaults to `SYMMETRIC_DEFAULT`, `enable_key_rotation` defaults to `false`, both confirmed Terraform defaults. |
+| `aws_cloudtrail` | `NG-AWS-CLOUDTRAIL-001` (logging enabled) | `enable_logging` defaults to `true` when omitted (confirmed Terraform default). |
+| `aws_ebs_volume` | (encryption, via any `ebs_volume`-targeted control) | `encrypted` has no documented Terraform-level default — omitted entirely unless your Terraform sets it explicitly, never guessed either direction. |
+| `aws_iam_user` / `aws_iam_role` + `*_policy_attachment` / `*_policy` (inline) | `NG-AWS-IAM-001` (users) / `NG-AWS-IAM-012` (roles), admin-privilege detection | Attached-policy correlation (by ARN) is fully reliable. Inline-policy JSON is parsed from a heredoc or an escaped string literal; a `jsonencode(...)` policy body (a common, idiomatic way to write this) can't be evaluated by a static parser and is silently omitted from that one principal's own `inline_policies` — see Known gaps. |
 
 A Terraform resource type this tool doesn't recognize is silently
 skipped from evaluation (never sent, never fabricated as passing) —
@@ -79,16 +84,26 @@ disappears without a trace.
 - **CloudFormation and Bicep parsing** — not built. This is Terraform-
   only today; the roadmap's own original scope named all three, and
   the other two remain real, disclosed, unstarted work.
-- **Only 2 resource types mapped** (S3 public access, security group
-  ingress) — the curated starting set, not the full catalog. Extending
+- **A curated set of resource types, not the full catalog** — extending
   this means adding an entry to `nimbus_iac_scanner/resource_mapping.py`'s
   own `_MAPPERS` registry per new Terraform resource type, using the
   real `configuration.*` field shape the matching evaluation-engine
   control actually reads (confirmed by reading that control's own
   source, never guessed from a field name alone).
-- **`aws_vpc_security_group_ingress_rule`** (the newer, decomposed AWS
-  provider v5+ resource) is not mapped — only the classic inline
-  `ingress {}` block on `aws_security_group` itself.
+- **A standalone `aws_vpc_security_group_ingress_rule` can only be
+  correlated when it references a security group declared in the SAME
+  Terraform parse** — Terraform never exposes a security group's
+  eventual real `sg-xxxx` id statically, so a literal
+  `security_group_id` string (an externally-managed or data-sourced
+  security group) can't be matched back to anything and is skipped.
+  `cidr_ipv6`/`prefix_list_id`/`referenced_security_group_id` sources
+  on this resource aren't mapped either — only `cidr_ipv4`, matching
+  the only source type NG-AWS-EC2-001/002 themselves ever inspect.
+- **An inline IAM policy written via `jsonencode(...)` can't be
+  parsed** — a static parser can never evaluate a Terraform function
+  call. Only a heredoc or a JSON string literal (escaped or not)
+  parses; a `jsonencode(...)` policy is silently omitted from that
+  principal's own `inline_policies`, never fabricated or crashed on.
 - **No custom controls** — only the built-in catalog, same scope
   boundary `POST /cwpp/gate-check` (nimbus_app's own CWPP CI/CD gate)
   already established for the identical reason: a customer's own
