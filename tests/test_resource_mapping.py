@@ -1976,3 +1976,36 @@ def test_azure_recovery_vault_defaults():
         "public_network_access_enabled": True, "immutability_enabled": False,
         "soft_delete_enabled": True, "cmk_encryption_enabled": False,
     }
+
+
+# --- azurerm application_gateway (NG-AZURE-APPGATEWAY-001/002/003) ---------
+
+def test_azure_application_gateway_waf_and_tls_and_logging():
+    r = parse_source('''
+resource "azurerm_application_gateway" "gw" {
+  name = "gw" location = "e" resource_group_name = "rg"
+  waf_configuration { enabled = true firewall_mode = "Prevention" rule_set_version = "3.2" }
+  ssl_policy { policy_type = "Custom" min_protocol_version = "TLSv1_2" }
+}
+resource "azurerm_monitor_diagnostic_setting" "ds" {
+  name = "ds" target_resource_id = azurerm_application_gateway.gw.id
+  enabled_log { category = "ApplicationGatewayAccessLog" }
+}
+''')
+    entry = [e for e in map_resources(r) if e["resource_type"] == "application_gateway"][0]
+    assert entry["configuration"] == {"waf_enabled": True, "diagnostic_logging_enabled": True, "minimum_tls_1_2": True}
+
+
+def test_azure_application_gateway_firewall_policy_id_counts_as_waf():
+    r = parse_source('''
+resource "azurerm_application_gateway" "gw" { name = "gw" location = "e" resource_group_name = "rg" firewall_policy_id = "/subscriptions/s/x" }
+''')
+    c = [e for e in map_resources(r) if e["resource_type"] == "application_gateway"][0]["configuration"]
+    assert c["waf_enabled"] is True
+    assert c["diagnostic_logging_enabled"] is False
+    assert "minimum_tls_1_2" not in c
+
+
+def test_azure_application_gateway_defaults():
+    r = parse_source('resource "azurerm_application_gateway" "gw" { name = "gw" location = "e" resource_group_name = "rg" }')
+    assert map_resources(r)[0]["configuration"] == {"waf_enabled": False, "diagnostic_logging_enabled": False}

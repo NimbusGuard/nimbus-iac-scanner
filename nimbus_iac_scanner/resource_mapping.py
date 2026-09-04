@@ -1333,6 +1333,33 @@ def _map_azure_recovery_services_vault(key: ResourceKey, body: dict[str, Any], _
 
 
 # ---------------------------------------------------------------------------
+# Application Gateway (NG-AZURE-APPGATEWAY-001/002/003). waf_enabled = a
+# waf_configuration block enabled OR a firewall_policy_id is set;
+# minimum_tls_1_2 = ssl_policy.min_protocol_version is TLSv1_2/1_3 (omitted
+# when absent); diagnostic_logging_enabled = a diagnostic setting with an
+# enabled log (Bicep omits it -- child resource).
+# ---------------------------------------------------------------------------
+
+def _map_azure_application_gateway(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    waf = _first_block(body, "waf_configuration")
+    waf_enabled = bool(body.get("firewall_policy_id")) or (waf is not None and bool(waf.get("enabled", False)))
+    ssl = _first_block(body, "ssl_policy")
+    configuration: dict[str, Any] = {
+        "waf_enabled": waf_enabled,
+        "diagnostic_logging_enabled": _diagnostic_setting_has_enabled_log("azurerm_application_gateway", key[1], all_resources),
+    }
+    if ssl is not None and "min_protocol_version" in ssl:
+        configuration["minimum_tls_1_2"] = str(ssl.get("min_protocol_version") or "") in ("TLSv1_2", "TLSv1_3")
+    return {
+        "provider": "azure",
+        "resource_type": "application_gateway",
+        "configuration": configuration,
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_application_gateway.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -1962,6 +1989,7 @@ _MAPPERS = {
     "azurerm_function_app": _map_azure_function_app,
     "azurerm_kubernetes_cluster": _map_azure_aks_cluster,
     "azurerm_recovery_services_vault": _map_azure_recovery_services_vault,
+    "azurerm_application_gateway": _map_azure_application_gateway,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

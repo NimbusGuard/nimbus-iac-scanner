@@ -354,6 +354,19 @@ def _map_recovery_services_vault(key: tuple[str, str], resource: dict[str, Any])
     }, "tags": resource.get("tags") or {}, "identifier": f"Microsoft.RecoveryServices/vaults.{key[1]}"}
 
 
+def _map_application_gateway(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    waf = p.get("webApplicationFirewallConfiguration") or {}
+    ssl = p.get("sslPolicy") or {}
+    cfg: dict[str, Any] = {
+        "waf_enabled": bool(waf.get("enabled", False)) or bool((p.get("firewallPolicy") or {}).get("id")),
+    }
+    if "minProtocolVersion" in ssl:
+        cfg["minimum_tls_1_2"] = str(ssl.get("minProtocolVersion") or "") in ("TLSv1_2", "TLSv1_3")
+    return {"provider": "azure", "resource_type": "application_gateway", "configuration": cfg,
+            "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Network/applicationGateways.{key[1]}"}
+
+
 _MAPPERS = {
     "Microsoft.Network/networkSecurityGroups": _map_network_security_group,
     "Microsoft.Storage/storageAccounts": _map_storage_account,
@@ -378,6 +391,7 @@ _MAPPERS = {
     "Microsoft.Web/sites": _map_web_site,
     "Microsoft.ContainerService/managedClusters": _map_aks_cluster,
     "Microsoft.RecoveryServices/vaults": _map_recovery_services_vault,
+    "Microsoft.Network/applicationGateways": _map_application_gateway,
 }
 
 

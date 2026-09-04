@@ -317,3 +317,16 @@ def test_recovery_vault_bicep():
         "public_network_access_enabled": False, "immutability_enabled": True,
         "soft_delete_enabled": True, "cmk_encryption_enabled": True,
     }
+
+
+# --- application_gateway (Bicep) ------------------------------------------
+
+def test_application_gateway_bicep():
+    e = _one({"type": "Microsoft.Network/applicationGateways", "properties": {
+        "webApplicationFirewallConfiguration": {"enabled": True}, "sslPolicy": {"minProtocolVersion": "TLSv1_2"}}})
+    assert e["configuration"] == {"waf_enabled": True, "minimum_tls_1_2": True}
+
+
+def test_application_gateway_bicep_firewall_policy():
+    e = _one({"type": "Microsoft.Network/applicationGateways", "properties": {"firewallPolicy": {"id": "/x"}}})
+    assert e["configuration"] == {"waf_enabled": True}

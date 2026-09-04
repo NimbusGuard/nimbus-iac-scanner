@@ -69,7 +69,7 @@
 - [x] cosmosdb_account (4 controls) -- azurerm + Bicep
 - [x] function_app (3 of 4) -- azurerm+Bicep(kind-branch); secrets_detected omitted (content scan)
 - [x] recovery_services_vault (4 controls) -- azurerm+Bicep
-- [ ] application_gateway (3 controls)
+- [x] application_gateway (3 controls) -- azurerm+Bicep; diagnostic_logging via diagnostic-setting (TF only)
 - [ ] front_door (3 controls)
 - [x] service_bus_namespace (3 controls) -- azurerm+Bicep; minimum_tls omitted when absent
 - [x] redis_cache (3 controls) -- azurerm + Bicep; minimum_tls omitted when absent (version-ambiguous default)
@@ -79,11 +79,11 @@
 - [x] automation_account (2 controls) -- azurerm+Bicep
 - [x] sql_database (2 controls) -- storage_account_type->API redundancy enum; ledger
 - [x] api_management (1 of 2) -- public_network only; minimum_tls omitted (custom_properties mechanism)
-- [ ] managed_identity (1 controls)
+- [x] managed_identity -- SKIPPED: the single control (IDENTITY-004) is an RBAC-graph check over role_assignments referencing a computed principal_id, not derivable from IaC
 - [x] log_analytics_workspace (1 control) -- azurerm+Bicep; retention omitted when absent (no documented default)
 - [x] subnet (1 control)
 - [x] key_vault_secret (1 control) -- azurerm+Bicep
 - [x] storage_container (1 control) -- container_access_type->API public_access enum
 - [x] synapse_workspace (1 control) -- azurerm+Bicep
-- [ ] * (1 controls)
+- [x] * -- N/A: wildcard target (vulnerability/side-channel control family), not an IaC-declarable resource
 
