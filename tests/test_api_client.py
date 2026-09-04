@@ -115,3 +115,17 @@ def test_no_source_key_when_source_is_none():
     with patch("nimbus_iac_scanner.api_client.requests.post", return_value=_fake_response(200, body)) as mock_post:
         run_gate_check("https://api.example.com", "key", [{"provider": "aws", "resource_type": "s3_bucket"}])
     assert "source" not in mock_post.call_args.kwargs["json"]
+
+
+def test_block_severity_is_captured_from_the_response():
+    body = {"passed": True, "results": [], "block_severity": "HIGH"}
+    with patch("nimbus_iac_scanner.api_client.requests.post", return_value=_fake_response(200, body)):
+        result = run_gate_check("https://api.example.com", "key", [{"provider": "aws", "resource_type": "s3_bucket"}])
+    assert result.block_severity == "HIGH"
+
+
+def test_block_severity_none_when_absent():
+    body = {"passed": True, "results": []}
+    with patch("nimbus_iac_scanner.api_client.requests.post", return_value=_fake_response(200, body)):
+        result = run_gate_check("https://api.example.com", "key", [{"provider": "aws", "resource_type": "s3_bucket"}])
+    assert result.block_severity is None

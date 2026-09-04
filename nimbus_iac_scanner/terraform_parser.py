@@ -31,13 +31,23 @@ _REFERENCE_PREFIX = "${"
 _REFERENCE_SUFFIX = "}"
 
 
-def parse_directory(path: str) -> dict[tuple[str, str], dict[str, Any]]:
+def parse_directory(path: str, only_files: "set[str] | None" = None) -> dict[tuple[str, str], dict[str, Any]]:
     """Every `*.tf` file under `path` (recursively), merged into one flat
     dict. A file that fails to parse (a real HCL syntax error) raises --
     a CI check must never silently skip a file it couldn't read, that
-    would be a false sense of coverage, not a legitimate skip."""
+    would be a false sense of coverage, not a legitimate skip.
+
+    `only_files` (used by --changed-only): when given, only files whose
+    resolved absolute path is in this set are parsed -- the rest are
+    skipped. This is why --changed-only restricts the SCAN at parse time
+    rather than filtering resources afterwards: the Terraform key is
+    (resource_type, resource_name), the source file isn't retained past
+    parsing, so the only correct way to scope by file is to not parse the
+    unchanged files at all."""
     resources: dict[tuple[str, str], dict[str, Any]] = {}
     for tf_file in sorted(Path(path).rglob("*.tf")):
+        if only_files is not None and str(tf_file.resolve()) not in only_files:
+            continue
         with open(tf_file, encoding="utf-8") as f:
             text = f.read()
         resources.update(parse_source(text))

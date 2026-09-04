@@ -38,6 +38,42 @@ Exit codes: `0` passed, `1` a real misconfiguration blocked the build,
 `2` the check itself couldn't run (bad credentials, unreachable API, a
 real IaC syntax error, a missing `bicep` CLI).
 
+### Blocking policy (which findings fail the build)
+
+By default any FAIL blocks the build. Two ways to change that:
+
+- `--min-severity HIGH` (or CRITICAL/MEDIUM/LOW/INFORMATIONAL) — only a
+  FAIL at or above that severity blocks; lower-severity FAILs are
+  reported but don't fail the build.
+- **A central policy on the platform.** An org admin can set
+  `iac_block_severity` on the organization in NimbusGuard
+  (`PATCH /organizations/{id}`); the CLI reads it from the gate-check
+  response and uses it as the default threshold, so the block policy
+  lives in one place instead of every pipeline's YAML. Precedence: an
+  explicit `--min-severity` flag always wins; otherwise the org policy;
+  otherwise any FAIL blocks. (A FAIL of unknown severity always blocks —
+  fail-closed.)
+
+### `--changed-only` (scan just the PR delta)
+
+For a repo with a large existing backlog, `--changed-only` evaluates only
+the IaC files changed in the current PR/MR (or since `--diff-base`),
+instead of the whole tree — so a PR's report doesn't re-list every
+pre-existing finding in the repo.
+
+```bash
+nimbus-iac-scan --path infra/ --changed-only
+nimbus-iac-scan --path infra/ --changed-only --diff-base origin/main
+```
+
+It resolves the base ref from the CI's own PR/MR context automatically
+(GitHub `GITHUB_BASE_REF`, GitLab `CI_MERGE_REQUEST_DIFF_BASE_SHA`/target
+branch), falling back to `HEAD~1` on a plain push. Needs a git checkout
+with the base ref available — if the diff genuinely can't be computed
+(shallow clone without the base, not a git repo), it exits `2` (the check
+couldn't run as requested) rather than silently full-scanning. A PR that
+changes no IaC files exits `0` cleanly.
+
 ## GitHub Actions
 
 ```yaml

@@ -22,6 +22,7 @@ import sys
 from nimbus_iac_scanner import cloudformation_mapping, cloudformation_parser, resource_mapping, terraform_parser
 from nimbus_iac_scanner.api_client import GateCheckError, run_gate_check
 from nimbus_iac_scanner.ci_source import collect_ci_source
+from nimbus_iac_scanner.git_diff import DiffError, changed_files as git_changed_files
 from nimbus_iac_scanner.bicep_parser import BicepCliNotFoundError, BicepCompileError
 from nimbus_iac_scanner import bicep_mapping, bicep_parser
 from nimbus_iac_scanner.mr_comment import MrCommentError, find_merge_request_iid
@@ -47,7 +48,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--min-severity", default=None, choices=["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL"],
-        help="Only fail the build on a FAIL at or above this severity (default: any FAIL blocks the build).",
+        help=(
+            "Only fail the build on a FAIL at or above this severity. Overrides the "
+            "organization's central block policy (Organization.iac_block_severity) if that "
+            "is set on the platform. When neither is set, any FAIL blocks the build."
+        ),
     )
     parser.add_argument(
         "--post-pr-comment", action="store_true",
@@ -57,29 +62,51 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--post-mr-comment", action="store_true",
         help="Post/update a summary note on the current GitLab merge request (GitLab CI only; needs NIMBUS_GITLAB_TOKEN).",
     )
+    parser.add_argument(
+        "--changed-only", action="store_true",
+        help=(
+            "Only evaluate IaC files changed in this PR/MR (or since --diff-base), "
+            "not the whole tree -- for repos with a large existing backlog that don't "
+            "want every PR's report re-listing pre-existing findings. Needs a git "
+            "checkout with the base ref available (exit 2 if the diff can't be computed)."
+        ),
+    )
+    parser.add_argument(
+        "--diff-base", default=None,
+        help=(
+            "The base git ref to diff against for --changed-only (e.g. origin/main). "
+            "Defaults to the CI's own PR/MR base, or HEAD~1 outside a PR."
+        ),
+    )
     return parser
 
 
-def _collect_all_resources(path: str) -> tuple[list[dict], set[str]]:
+def _collect_all_resources(path: str, changed_files: "set[str] | None" = None) -> tuple[list[dict], set[str]]:
     """Runs all 3 format parsers+mappers, merges their real, mapped
     resources and their real unrecognized-type sets into one combined
     pair. A Bicep-specific failure (no CLI, a real compile error) is
     NOT caught here -- it propagates up to `main`, which turns it into
     the same real, non-zero "the check itself couldn't run" exit code
     as any other unreachable-dependency failure, never silently
-    dropping the Bicep half of the scan."""
+    dropping the Bicep half of the scan.
+
+    `changed_files` (--changed-only): when given, each parser only reads
+    files whose absolute path is in the set (see each parser's own
+    `only_files` param) -- so the scan is scoped to the PR delta at parse
+    time, correct for all 3 formats including Terraform (whose key drops
+    the source file)."""
     mapped: list[dict] = []
     unmapped: set[str] = set()
 
-    tf_resources = terraform_parser.parse_directory(path)
+    tf_resources = terraform_parser.parse_directory(path, only_files=changed_files)
     mapped.extend(resource_mapping.map_resources(tf_resources))
     unmapped |= resource_mapping.unmapped_resource_types(tf_resources)
 
-    cfn_resources = cloudformation_parser.parse_directory(path)
+    cfn_resources = cloudformation_parser.parse_directory(path, only_files=changed_files)
     mapped.extend(cloudformation_mapping.map_resources(cfn_resources))
     unmapped |= cloudformation_mapping.unmapped_resource_types(cfn_resources)
 
-    bicep_resources = bicep_parser.parse_directory(path)
+    bicep_resources = bicep_parser.parse_directory(path, only_files=changed_files)
     mapped.extend(bicep_mapping.map_resources(bicep_resources))
     unmapped |= bicep_mapping.unmapped_resource_types(bicep_resources)
 
@@ -93,16 +120,28 @@ def main(argv: list[str] | None = None) -> int:
         print("error: --api-url/--api-key (or NIMBUS_API_URL/NIMBUS_API_KEY) are required", file=sys.stderr)
         return 2
 
+    changed_files = None
+    if args.changed_only:
+        try:
+            changed_files = git_changed_files(args.diff_base)
+        except DiffError as e:
+            print(f"error: --changed-only could not compute the changed files: {e}", file=sys.stderr)
+            return 2
+        if not changed_files:
+            print("No changed files in this diff -- nothing to evaluate.")
+            return 0
+
     try:
-        mapped, unmapped = _collect_all_resources(args.path)
+        mapped, unmapped = _collect_all_resources(args.path, changed_files=changed_files)
     except (BicepCliNotFoundError, BicepCompileError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
     if not mapped:
-        print("No recognized resources found to evaluate.")
+        scope = "changed files" if args.changed_only else "--path"
+        print(f"No recognized resources found to evaluate in the {scope}.")
         if unmapped:
-            print(f"({len(unmapped)} unrecognized resource type(s) found -- see --path's own resources)")
+            print(f"({len(unmapped)} unrecognized resource type(s) found)")
         return 0
 
     try:
@@ -123,7 +162,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.post_mr_comment:
         _try_post_mr_comment(report)
 
-    fail = should_fail_build(result.results, args.min_severity)
+    # Precedence: an explicit --min-severity flag (local intent) always
+    # wins; otherwise the org's central block policy from the platform
+    # (Organization.iac_block_severity, returned by the gate-check);
+    # otherwise any FAIL blocks. So the block threshold can live centrally
+    # on NimbusGuard without every pipeline hardcoding it.
+    effective_min_severity = args.min_severity or result.block_severity
+    if args.min_severity is None and result.block_severity:
+        print(f"note: using the organization's central block policy (min severity: {result.block_severity})", file=sys.stderr)
+    fail = should_fail_build(result.results, effective_min_severity)
     return 1 if fail else 0
 
 

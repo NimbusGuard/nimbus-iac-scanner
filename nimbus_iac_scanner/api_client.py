@@ -32,6 +32,12 @@ class GateCheckResult:
     # several IacScans that share the same `source` metadata (repo/
     # branch/commit/PR), so the UI can still group them by commit.
     scan_ids: list[str] = field(default_factory=list)
+    # The org's central IaC block policy (Organization.iac_block_severity),
+    # as returned by the gate-check. The CLI uses this as its default
+    # blocking threshold when --min-severity isn't passed. None = "any
+    # FAIL blocks". Every batch of one run returns the same value (same
+    # org); the last non-None wins.
+    block_severity: Optional[str] = None
 
 
 def run_gate_check(
@@ -53,6 +59,7 @@ def run_gate_check(
     passed = True
     all_results: list[dict[str, Any]] = []
     scan_ids: list[str] = []
+    block_severity: Optional[str] = None
     for i in range(0, len(resources), GATE_CHECK_BATCH_SIZE):
         batch = resources[i:i + GATE_CHECK_BATCH_SIZE]
         request_body: dict[str, Any] = {"resources": batch}
@@ -84,5 +91,7 @@ def run_gate_check(
         scan_id = body.get("scan_id")
         if scan_id:
             scan_ids.append(str(scan_id))
+        if body.get("block_severity") is not None:
+            block_severity = body["block_severity"]
 
-    return GateCheckResult(passed=passed, results=all_results, scan_ids=scan_ids)
+    return GateCheckResult(passed=passed, results=all_results, scan_ids=scan_ids, block_severity=block_severity)

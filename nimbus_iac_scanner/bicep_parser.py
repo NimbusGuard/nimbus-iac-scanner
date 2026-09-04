@@ -62,7 +62,7 @@ def compile_to_arm(bicep_file: Path) -> dict[str, Any]:
     return json.loads(result.stdout)
 
 
-def parse_directory(path: str) -> dict[ResourceKey, dict[str, Any]]:
+def parse_directory(path: str, only_files: "set[str] | None" = None) -> dict[ResourceKey, dict[str, Any]]:
     """Every `.bicep` file under `path` (recursively), compiled to ARM
     JSON and flattened. Returns `{}` (no error) when there are simply
     no `.bicep` files to evaluate at all -- but raises
@@ -70,8 +70,15 @@ def parse_directory(path: str) -> dict[ResourceKey, dict[str, Any]]:
     IS found and the `bicep` CLI itself isn't available, since silently
     returning `{}` in that case would look identical to "this project
     has no Bicep resources," a real, misleading false negative for a
-    security tool."""
+    security tool.
+
+    `only_files` (used by --changed-only): when given, only files whose
+    resolved absolute path is in this set are considered -- the
+    CLI-not-found check then only fires if a CHANGED .bicep file exists,
+    never for an unchanged one outside the diff."""
     bicep_files = sorted(Path(path).rglob("*.bicep"))
+    if only_files is not None:
+        bicep_files = [f for f in bicep_files if str(f.resolve()) in only_files]
     if not bicep_files:
         return {}
     if not is_bicep_cli_available():

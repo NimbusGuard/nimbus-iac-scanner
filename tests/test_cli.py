@@ -139,3 +139,72 @@ def test_post_mr_comment_posts_when_a_real_merge_request_context_exists(monkeypa
     mock_post.assert_called_once()
     assert mock_post.call_args.args[0] == "https://gitlab.example.com"
     assert mock_post.call_args.args[2] == 9
+
+
+def test_org_block_policy_is_used_when_no_min_severity_flag(capsys):
+    # org policy HIGH; a LOW fail should NOT block (exit 0)
+    fake_result = GateCheckResult(
+        passed=False,
+        results=[{"identifier": "x", "status": "FAIL", "severity": "LOW"}],
+        block_severity="HIGH",
+    )
+    with patch("nimbus_iac_scanner.cli.run_gate_check", return_value=fake_result):
+        exit_code = main(["--path", FIXTURE_DIR, "--api-url", "https://api.example.com", "--api-key", "k"])
+    assert exit_code == 0
+
+
+def test_explicit_min_severity_flag_overrides_org_block_policy(capsys):
+    # org policy HIGH, but the flag says CRITICAL -> a HIGH fail must NOT block
+    fake_result = GateCheckResult(
+        passed=False,
+        results=[{"identifier": "x", "status": "FAIL", "severity": "HIGH"}],
+        block_severity="HIGH",
+    )
+    with patch("nimbus_iac_scanner.cli.run_gate_check", return_value=fake_result):
+        exit_code = main([
+            "--path", FIXTURE_DIR, "--api-url", "https://api.example.com", "--api-key", "k",
+            "--min-severity", "CRITICAL",
+        ])
+    assert exit_code == 0
+
+
+def test_org_block_policy_blocks_a_fail_at_the_threshold(capsys):
+    fake_result = GateCheckResult(
+        passed=False,
+        results=[{"identifier": "x", "status": "FAIL", "severity": "HIGH"}],
+        block_severity="HIGH",
+    )
+    with patch("nimbus_iac_scanner.cli.run_gate_check", return_value=fake_result):
+        exit_code = main(["--path", FIXTURE_DIR, "--api-url", "https://api.example.com", "--api-key", "k"])
+    assert exit_code == 1
+
+
+def test_changed_only_scans_only_changed_files(tmp_path):
+    (tmp_path / "changed.tf").write_text('resource "aws_security_group" "kept" { name = "k" }\n')
+    (tmp_path / "unchanged.tf").write_text('resource "aws_security_group" "dropped" { name = "d" }\n')
+    changed = {str((tmp_path / "changed.tf").resolve())}
+
+    fake_result = GateCheckResult(passed=True, results=[])
+    with patch("nimbus_iac_scanner.cli.git_changed_files", return_value=changed), \
+         patch("nimbus_iac_scanner.cli.run_gate_check", return_value=fake_result) as mock_run:
+        exit_code = main(["--path", str(tmp_path), "--changed-only", "--api-url", "https://api.example.com", "--api-key", "k"])
+    assert exit_code == 0
+    sent = mock_run.call_args.args[2]
+    identifiers = {r["identifier"] for r in sent}
+    assert identifiers == {"aws_security_group.kept"}  # unchanged.tf's resource is never parsed
+
+
+def test_changed_only_diff_error_exits_2(tmp_path, capsys):
+    from nimbus_iac_scanner.git_diff import DiffError
+    with patch("nimbus_iac_scanner.cli.git_changed_files", side_effect=DiffError("no base ref")):
+        exit_code = main(["--path", str(tmp_path), "--changed-only", "--api-url", "https://api.example.com", "--api-key", "k"])
+    assert exit_code == 2
+    assert "changed-only" in capsys.readouterr().err
+
+
+def test_changed_only_empty_diff_exits_0_without_calling_the_api(tmp_path):
+    with patch("nimbus_iac_scanner.cli.git_changed_files", return_value=set()), \
+         patch("nimbus_iac_scanner.cli.run_gate_check") as mock_run:
+        exit_code = main(["--path", str(tmp_path), "--changed-only", "--api-url", "https://api.example.com", "--api-key", "k"])
+    assert exit_code == 0
+    mock_run.assert_not_called()

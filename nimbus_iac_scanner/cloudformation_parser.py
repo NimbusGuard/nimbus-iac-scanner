@@ -96,17 +96,22 @@ def parse_source(text: str, is_yaml: bool, file_key: str = "") -> dict[ResourceK
     }
 
 
-def parse_directory(path: str) -> dict[ResourceKey, dict[str, Any]]:
+def parse_directory(path: str, only_files: "set[str] | None" = None) -> dict[ResourceKey, dict[str, Any]]:
     """Every `.json`/`.yaml`/`.yml` file under `path` (recursively) that
     parses as a real CloudFormation template, merged into one flat
     dict. A genuinely malformed file (real JSON/YAML syntax error)
     raises -- same "never silently skip a file we couldn't read"
     posture as `terraform_parser.parse_directory`. A well-formed
     JSON/YAML file that just isn't a CloudFormation template (no
-    `Resources` key) contributes nothing, not an error."""
+    `Resources` key) contributes nothing, not an error.
+
+    `only_files` (used by --changed-only): when given, only files whose
+    resolved absolute path is in this set are parsed."""
     resources: dict[ResourceKey, dict[str, Any]] = {}
     for pattern, is_yaml in ((".json", False), (".yaml", True), (".yml", True)):
         for tpl_file in sorted(Path(path).rglob(f"*{pattern}")):
+            if only_files is not None and str(tpl_file.resolve()) not in only_files:
+                continue
             with open(tpl_file, encoding="utf-8") as f:
                 text = f.read()
             resources.update(parse_source(text, is_yaml, file_key=str(tpl_file)))

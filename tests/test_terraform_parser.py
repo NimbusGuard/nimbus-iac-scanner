@@ -71,3 +71,12 @@ resource "aws_security_group" "nested" {
 ''')
     resources = parse_directory(str(tmp_path))
     assert ("aws_security_group", "nested") in resources
+
+
+def test_parse_directory_only_files_restricts_to_the_given_files(tmp_path):
+    from nimbus_iac_scanner import terraform_parser
+    (tmp_path / "a.tf").write_text('resource "aws_s3_bucket" "a" {}\n')
+    (tmp_path / "b.tf").write_text('resource "aws_s3_bucket" "b" {}\n')
+    only = {str((tmp_path / "a.tf").resolve())}
+    resources = terraform_parser.parse_directory(str(tmp_path), only_files=only)
+    assert set(resources.keys()) == {("aws_s3_bucket", "a")}  # b.tf skipped
