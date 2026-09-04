@@ -71,19 +71,19 @@
 - [ ] recovery_services_vault (4 controls)
 - [ ] application_gateway (3 controls)
 - [ ] front_door (3 controls)
-- [ ] service_bus_namespace (3 controls)
+- [x] service_bus_namespace (3 controls) -- azurerm+Bicep; minimum_tls omitted when absent
 - [x] redis_cache (3 controls) -- azurerm + Bicep; minimum_tls omitted when absent (version-ambiguous default)
 - [ ] managed_disk (3 controls)
 - [ ] key_vault_key (2 controls)
-- [ ] event_hub_namespace (2 controls)
-- [ ] automation_account (2 controls)
+- [x] event_hub_namespace (2 controls) -- azurerm+Bicep
+- [x] automation_account (2 controls) -- azurerm+Bicep
 - [ ] sql_database (2 controls)
 - [ ] api_management (2 controls)
 - [ ] managed_identity (1 controls)
-- [ ] log_analytics_workspace (1 controls)
+- [x] log_analytics_workspace (1 control) -- azurerm+Bicep; retention omitted when absent (no documented default)
 - [x] subnet (1 control)
 - [ ] key_vault_secret (1 controls)
 - [ ] storage_container (1 controls)
-- [ ] synapse_workspace (1 controls)
+- [x] synapse_workspace (1 control) -- azurerm+Bicep
 - [ ] * (1 controls)
 

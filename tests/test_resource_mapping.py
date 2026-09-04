@@ -1651,3 +1651,54 @@ resource "azurerm_monitor_diagnostic_setting" "ds" {
     entry = [e for e in map_resources(resources) if e["resource_type"] == "key_vault"][0]
     assert entry["configuration"]["rbac_authorization_enabled"] is True
     assert entry["configuration"]["logging_enabled"] is True
+
+
+# --- azurerm servicebus/eventhub/automation/synapse/loganalytics ----------
+
+def test_azure_service_bus_namespace():
+    r = parse_source('''
+resource "azurerm_servicebus_namespace" "sb" {
+  name = "sb" sku = "Premium"
+  local_auth_enabled            = false
+  minimum_tls_version           = "1.2"
+  public_network_access_enabled = false
+}
+''')
+    assert map_resources(r)[0]["configuration"] == {
+        "local_auth_disabled": True, "public_network_access_enabled": False, "minimum_tls_1_2": True,
+    }
+
+
+def test_azure_service_bus_defaults_omit_tls():
+    r = parse_source('resource "azurerm_servicebus_namespace" "sb" { name = "sb" sku = "Standard" }')
+    cfg = map_resources(r)[0]["configuration"]
+    assert cfg == {"local_auth_disabled": False, "public_network_access_enabled": True}
+    assert "minimum_tls_1_2" not in cfg
+
+
+def test_azure_event_hub_namespace_defaults():
+    r = parse_source('resource "azurerm_eventhub_namespace" "eh" { name = "eh" sku = "Standard" }')
+    assert map_resources(r)[0]["configuration"] == {"local_auth_disabled": False, "public_network_access_enabled": True}
+
+
+def test_azure_automation_account_hardened():
+    r = parse_source('''
+resource "azurerm_automation_account" "aa" {
+  name = "aa" sku_name = "Basic"
+  local_authentication_enabled  = false
+  public_network_access_enabled = false
+}
+''')
+    assert map_resources(r)[0]["configuration"] == {"local_auth_disabled": True, "public_network_access_enabled": False}
+
+
+def test_azure_synapse_workspace():
+    r = parse_source('resource "azurerm_synapse_workspace" "sw" { name = "sw" public_network_access_enabled = false }')
+    assert map_resources(r)[0]["configuration"] == {"public_network_access_enabled": False}
+
+
+def test_azure_log_analytics_retention_omitted_when_absent():
+    assert map_resources(parse_source('''
+resource "azurerm_log_analytics_workspace" "la" { name = "la" retention_in_days = 90 }
+'''))[0]["configuration"] == {"retention_days": 90}
+    assert map_resources(parse_source('resource "azurerm_log_analytics_workspace" "la" { name = "la" }'))[0]["configuration"] == {}

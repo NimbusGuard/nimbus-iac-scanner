@@ -152,3 +152,32 @@ def test_key_vault_defaults_bicep():
         "purge_protection_enabled": False, "rbac_authorization_enabled": False,
         "soft_delete_retention_days": 90, "public_network_access_enabled": True,
     }
+
+
+# --- servicebus/eventhub/automation/synapse/loganalytics (Bicep) ----------
+
+def test_service_bus_bicep():
+    e = _one({"type": "Microsoft.ServiceBus/namespaces",
+              "properties": {"disableLocalAuth": True, "minimumTlsVersion": "1.2", "publicNetworkAccess": "Disabled"}})
+    assert e["configuration"] == {"local_auth_disabled": True, "public_network_access_enabled": False, "minimum_tls_1_2": True}
+
+
+def test_event_hub_bicep_defaults():
+    e = _one({"type": "Microsoft.EventHub/namespaces", "properties": {}})
+    assert e["configuration"] == {"local_auth_disabled": False, "public_network_access_enabled": True}
+
+
+def test_automation_account_bicep():
+    e = _one({"type": "Microsoft.Automation/automationAccounts",
+              "properties": {"disableLocalAuth": True, "publicNetworkAccess": "Disabled"}})
+    assert e["configuration"] == {"local_auth_disabled": True, "public_network_access_enabled": False}
+
+
+def test_synapse_bicep_default():
+    e = _one({"type": "Microsoft.Synapse/workspaces", "properties": {}})
+    assert e["configuration"] == {"public_network_access_enabled": True}
+
+
+def test_log_analytics_bicep():
+    assert _one({"type": "Microsoft.OperationalInsights/workspaces", "properties": {"retentionInDays": 90}})["configuration"] == {"retention_days": 90}
+    assert _one({"type": "Microsoft.OperationalInsights/workspaces", "properties": {}})["configuration"] == {}

@@ -977,6 +977,71 @@ def _map_azure_key_vault(key: ResourceKey, body: dict[str, Any], all_resources: 
 
 
 # ---------------------------------------------------------------------------
+# Service Bus / Event Hub / Automation / Synapse / Log Analytics. All
+# public_network_access_enabled default true; local-auth attribute names
+# differ per resource (confirmed live). minimum_tls / retention defaults are
+# version-ambiguous -> omitted when absent.
+# ---------------------------------------------------------------------------
+
+def _map_azure_service_bus_namespace(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    configuration: dict[str, Any] = {
+        "local_auth_disabled": not bool(body.get("local_auth_enabled", True)),
+        "public_network_access_enabled": bool(body.get("public_network_access_enabled", True)),
+    }
+    if "minimum_tls_version" in body:
+        configuration["minimum_tls_1_2"] = str(body.get("minimum_tls_version") or "") >= "1.2"
+    return {
+        "provider": "azure", "resource_type": "service_bus_namespace",
+        "configuration": configuration, "tags": body.get("tags") or {},
+        "identifier": f"azurerm_servicebus_namespace.{key[1]}",
+    }
+
+
+def _map_azure_event_hub_namespace(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "azure", "resource_type": "event_hub_namespace",
+        "configuration": {
+            "local_auth_disabled": not bool(body.get("local_authentication_enabled", True)),
+            "public_network_access_enabled": bool(body.get("public_network_access_enabled", True)),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_eventhub_namespace.{key[1]}",
+    }
+
+
+def _map_azure_automation_account(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "azure", "resource_type": "automation_account",
+        "configuration": {
+            "local_auth_disabled": not bool(body.get("local_authentication_enabled", True)),
+            "public_network_access_enabled": bool(body.get("public_network_access_enabled", True)),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_automation_account.{key[1]}",
+    }
+
+
+def _map_azure_synapse_workspace(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "azure", "resource_type": "synapse_workspace",
+        "configuration": {"public_network_access_enabled": bool(body.get("public_network_access_enabled", True))},
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_synapse_workspace.{key[1]}",
+    }
+
+
+def _map_azure_log_analytics_workspace(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    configuration: dict[str, Any] = {}
+    if "retention_in_days" in body:
+        configuration["retention_days"] = int(body["retention_in_days"])
+    return {
+        "provider": "azure", "resource_type": "log_analytics_workspace",
+        "configuration": configuration, "tags": body.get("tags") or {},
+        "identifier": f"azurerm_log_analytics_workspace.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -1585,6 +1650,11 @@ _MAPPERS = {
     "azurerm_postgresql_flexible_server": _map_azure_postgresql_server,
     "azurerm_mysql_flexible_server": _map_azure_mysql_server,
     "azurerm_key_vault": _map_azure_key_vault,
+    "azurerm_servicebus_namespace": _map_azure_service_bus_namespace,
+    "azurerm_eventhub_namespace": _map_azure_event_hub_namespace,
+    "azurerm_automation_account": _map_azure_automation_account,
+    "azurerm_synapse_workspace": _map_azure_synapse_workspace,
+    "azurerm_log_analytics_workspace": _map_azure_log_analytics_workspace,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

@@ -164,6 +164,50 @@ def _map_key_vault(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, 
     }
 
 
+def _map_service_bus_namespace(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    cfg: dict[str, Any] = {
+        "local_auth_disabled": bool(p.get("disableLocalAuth", False)),
+        "public_network_access_enabled": str(p.get("publicNetworkAccess", "Enabled")).lower() != "disabled",
+    }
+    if "minimumTlsVersion" in p:
+        cfg["minimum_tls_1_2"] = str(p.get("minimumTlsVersion") or "") >= "1.2"
+    return {"provider": "azure", "resource_type": "service_bus_namespace", "configuration": cfg,
+            "tags": resource.get("tags") or {}, "identifier": f"Microsoft.ServiceBus/namespaces.{key[1]}"}
+
+
+def _map_event_hub_namespace(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    return {"provider": "azure", "resource_type": "event_hub_namespace",
+            "configuration": {"local_auth_disabled": bool(p.get("disableLocalAuth", False)),
+                              "public_network_access_enabled": str(p.get("publicNetworkAccess", "Enabled")).lower() != "disabled"},
+            "tags": resource.get("tags") or {}, "identifier": f"Microsoft.EventHub/namespaces.{key[1]}"}
+
+
+def _map_automation_account(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    return {"provider": "azure", "resource_type": "automation_account",
+            "configuration": {"local_auth_disabled": bool(p.get("disableLocalAuth", False)),
+                              "public_network_access_enabled": str(p.get("publicNetworkAccess", "Enabled")).lower() != "disabled"},
+            "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Automation/automationAccounts.{key[1]}"}
+
+
+def _map_synapse_workspace(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    return {"provider": "azure", "resource_type": "synapse_workspace",
+            "configuration": {"public_network_access_enabled": str(p.get("publicNetworkAccess", "Enabled")).lower() != "disabled"},
+            "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Synapse/workspaces.{key[1]}"}
+
+
+def _map_log_analytics_workspace(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    cfg: dict[str, Any] = {}
+    if "retentionInDays" in p:
+        cfg["retention_days"] = int(p["retentionInDays"])
+    return {"provider": "azure", "resource_type": "log_analytics_workspace", "configuration": cfg,
+            "tags": resource.get("tags") or {}, "identifier": f"Microsoft.OperationalInsights/workspaces.{key[1]}"}
+
+
 _MAPPERS = {
     "Microsoft.Network/networkSecurityGroups": _map_network_security_group,
     "Microsoft.Storage/storageAccounts": _map_storage_account,
@@ -172,6 +216,11 @@ _MAPPERS = {
     "Microsoft.DBforPostgreSQL/flexibleServers": _map_postgresql_server,
     "Microsoft.DBforMySQL/flexibleServers": _map_mysql_server,
     "Microsoft.KeyVault/vaults": _map_key_vault,
+    "Microsoft.ServiceBus/namespaces": _map_service_bus_namespace,
+    "Microsoft.EventHub/namespaces": _map_event_hub_namespace,
+    "Microsoft.Automation/automationAccounts": _map_automation_account,
+    "Microsoft.Synapse/workspaces": _map_synapse_workspace,
+    "Microsoft.OperationalInsights/workspaces": _map_log_analytics_workspace,
 }
 
 
