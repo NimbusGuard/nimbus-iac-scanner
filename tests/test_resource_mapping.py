@@ -151,13 +151,14 @@ resource "aws_security_group" "egress_only" {
 
 
 def test_unrecognized_resource_type_is_skipped_not_fabricated():
+    # aws_lambda_layer_version has no Evaluation Engine control -> never mapped.
     resources = parse_source('''
-resource "aws_lambda_function" "fn" {
-  function_name = "my-function"
+resource "aws_lambda_layer_version" "lyr" {
+  layer_name = "my-layer"
 }
 ''')
     assert map_resources(resources) == []
-    assert unmapped_resource_types(resources) == {"aws_lambda_function"}
+    assert unmapped_resource_types(resources) == {"aws_lambda_layer_version"}
 
 
 def test_unmapped_resource_types_excludes_recognized_and_consumed_only_types():
@@ -174,11 +175,11 @@ resource "aws_s3_bucket_public_access_block" "data" {
   restrict_public_buckets = true
 }
 
-resource "aws_lambda_function" "fn" {
-  function_name = "my-function"
+resource "aws_lambda_layer_version" "lyr" {
+  layer_name = "my-layer"
 }
 ''')
-    assert unmapped_resource_types(resources) == {"aws_lambda_function"}
+    assert unmapped_resource_types(resources) == {"aws_lambda_layer_version"}
 
 
 # --------------------------------------------------------------------------
@@ -789,3 +790,70 @@ resource "aws_instance" "private" {
 }
 ''')
     assert map_resources(resources)[0]["configuration"]["public_ip_address"] is False
+
+
+# --- lambda_function (NG-AWS-AWSLAMBDA-002/003/004/005) --------------------
+
+def test_lambda_function_all_knowable_fields_and_function_url_none():
+    resources = parse_source('''
+resource "aws_lambda_function" "fn" {
+  function_name = "worker"
+  runtime       = "python3.12"
+  kms_key_arn   = "arn:aws:kms:us-east-1:1:key/abc"
+  tracing_config { mode = "Active" }
+}
+
+resource "aws_lambda_function_url" "u" {
+  function_name      = aws_lambda_function.fn.function_name
+  authorization_type = "NONE"
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "lambda_function"][0]
+    cfg = entry["configuration"]
+    assert cfg["runtime"] == "python3.12"
+    assert cfg["env_encrypted_with_cmk"] is True
+    assert cfg["xray_tracing_enabled"] is True
+    assert cfg["function_url_auth_none"] is True
+    assert "resource_policy_allows_public" not in cfg
+    assert "secrets_detected" not in cfg
+    assert entry["identifier"] == "aws_lambda_function.fn"
+
+
+def test_lambda_function_defaults_and_no_url():
+    resources = parse_source('''
+resource "aws_lambda_function" "bare" {
+  function_name = "bare"
+  runtime       = "nodejs18.x"
+}
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert cfg["env_encrypted_with_cmk"] is False
+    assert cfg["xray_tracing_enabled"] is False
+    assert cfg["function_url_auth_none"] is False  # no URL resource -> no unauthenticated URL
+    assert cfg["runtime"] == "nodejs18.x"
+
+
+def test_lambda_function_url_with_iam_auth_is_not_auth_none():
+    resources = parse_source('''
+resource "aws_lambda_function" "fn" {
+  function_name = "fn"
+  runtime       = "python3.12"
+}
+resource "aws_lambda_function_url" "u" {
+  function_name      = aws_lambda_function.fn.function_name
+  authorization_type = "AWS_IAM"
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "lambda_function"][0]
+    assert entry["configuration"]["function_url_auth_none"] is False
+
+
+def test_lambda_container_image_has_no_runtime_key():
+    resources = parse_source('''
+resource "aws_lambda_function" "img" {
+  function_name = "img"
+  package_type  = "Image"
+  image_uri     = "1.dkr.ecr.us-east-1.amazonaws.com/app:latest"
+}
+''')
+    assert "runtime" not in map_resources(resources)[0]["configuration"]

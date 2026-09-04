@@ -390,6 +390,37 @@ def _map_ec2_instance(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Lambda function (NG-AWS-AWSLAMBDA-003/004/005 -- the inline subset).
+# Runtime; TracingConfig.Mode == "Active" -> xray_tracing_enabled; KmsKeyArn
+# -> env_encrypted_with_cmk. function_url_auth_none is OMITTED: AWS::Lambda::Url
+# is a separate resource and CloudFormation mappers here take no all_resources
+# for cross-resource correlation (a real, disclosed gap -> AWSLAMBDA-002 reads
+# NOT_EVALUATED, never a false verdict). resource_policy_allows_public /
+# secrets_detected omitted for the same reasons as the Terraform mapper.
+# ---------------------------------------------------------------------------
+
+def _map_lambda_function(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    configuration: dict[str, Any] = {
+        "env_encrypted_with_cmk": bool(properties.get("KmsKeyArn")),
+    }
+    runtime = properties.get("Runtime")
+    if runtime is not None:
+        configuration["runtime"] = runtime
+    tracing = properties.get("TracingConfig")
+    configuration["xray_tracing_enabled"] = bool(
+        isinstance(tracing, dict) and tracing.get("Mode") == "Active"
+    )
+    return {
+        "provider": "aws",
+        "resource_type": "lambda_function",
+        "configuration": configuration,
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::Lambda::Function.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "AWS::S3::Bucket": _map_s3_bucket,
     "AWS::EC2::SecurityGroup": _map_security_group,
@@ -403,6 +434,7 @@ _MAPPERS = {
     "AWS::EKS::Cluster": _map_eks_cluster,
     "AWS::DynamoDB::Table": _map_dynamodb_table,
     "AWS::EC2::Instance": _map_ec2_instance,
+    "AWS::Lambda::Function": _map_lambda_function,
 }
 
 

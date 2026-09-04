@@ -193,14 +193,15 @@ Resources:
 
 
 def test_unrecognized_resource_type_is_skipped_not_fabricated():
+    # AWS::Lambda::LayerVersion has no Evaluation Engine control -> never mapped.
     resources = parse_source('''
 Resources:
-  Fn:
-    Type: AWS::Lambda::Function
+  Layer:
+    Type: AWS::Lambda::LayerVersion
     Properties: {}
 ''', is_yaml=True, file_key="t.yaml")
     assert map_resources(resources) == []
-    assert unmapped_resource_types(resources) == {"AWS::Lambda::Function"}
+    assert unmapped_resource_types(resources) == {"AWS::Lambda::LayerVersion"}
 
 
 # --- load_balancer (NG-AWS-ELB-001..007) ----------------------------------
@@ -384,3 +385,37 @@ Resources:
     assert cfg["detailed_monitoring_enabled"] is False
     assert cfg["metadata_options"] == {"http_tokens": "optional"}
     assert "public_ip_address" not in cfg
+
+
+# --- lambda_function (NG-AWS-AWSLAMBDA-003/004/005 inline subset) ----------
+
+def test_lambda_function_inline_fields():
+    entry = map_resources(parse_source('''
+Resources:
+  Fn:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.12
+      KmsKeyArn: arn:aws:kms:us-east-1:1:key/abc
+      TracingConfig:
+        Mode: Active
+''', is_yaml=True, file_key="t.yaml"))[0]
+    cfg = entry["configuration"]
+    assert cfg["runtime"] == "python3.12"
+    assert cfg["env_encrypted_with_cmk"] is True
+    assert cfg["xray_tracing_enabled"] is True
+    assert "function_url_auth_none" not in cfg  # CFN cross-resource not correlated
+    assert entry["identifier"] == "AWS::Lambda::Function.Fn"
+
+
+def test_lambda_function_defaults():
+    entry = map_resources(parse_source('''
+Resources:
+  Bare:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: nodejs18.x
+''', is_yaml=True, file_key="t.yaml"))[0]
+    cfg = entry["configuration"]
+    assert cfg["env_encrypted_with_cmk"] is False
+    assert cfg["xray_tracing_enabled"] is False

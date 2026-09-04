@@ -286,6 +286,59 @@ def _map_eks_cluster(key: ResourceKey, body: dict[str, Any], _all_resources) -> 
 
 
 # ---------------------------------------------------------------------------
+# Lambda function (NG-AWS-AWSLAMBDA-002/003/004/005 -- the statically-
+# knowable subset). Confirmed against controls/aws/awslambda/*.py:
+#  - runtime (AWSLAMBDA-003, checked vs a deprecated-runtimes list): emit the
+#    `runtime` string; a container-image function has none -> omit.
+#  - xray_tracing_enabled (AWSLAMBDA-004, require_flag): tracing_config block
+#    with mode == "Active" (no block -> tracing off). "Active" is the
+#    unambiguous "tracing enabled" state; anything else -> false, which errs
+#    toward flagging, never a false PASS.
+#  - env_encrypted_with_cmk (AWSLAMBDA-005, require_flag): a customer
+#    `kms_key_arn` set on the function.
+#  - function_url_auth_none (AWSLAMBDA-002, forbid_flag): correlated from a
+#    separate aws_lambda_function_url resource whose authorization_type is
+#    "NONE" -- True only for a genuinely unauthenticated URL; no URL resource
+#    referencing this function -> False (no unauthenticated URL exists).
+#  - resource_policy_allows_public (AWSLAMBDA-001) and secrets_detected
+#    (AWSLAMBDA-006, the Engine's own env-var scan) are OMITTED (a
+#    aws_lambda_permission principal analysis / a secret scan this mapper
+#    doesn't reproduce) -> those two read NOT_EVALUATED.
+# ---------------------------------------------------------------------------
+
+def _function_url_auth_none(fn_name: str, all_resources: dict[ResourceKey, dict[str, Any]]) -> bool:
+    for (resource_type, _name), body in all_resources.items():
+        if resource_type != "aws_lambda_function_url":
+            continue
+        ref = resolve_reference(body.get("function_name"))
+        matches_ref = ref is not None and ref[0] == "aws_lambda_function" and ref[1] == fn_name
+        matches_literal = body.get("function_name") == fn_name
+        if matches_ref or matches_literal:
+            if str(body.get("authorization_type")).upper() == "NONE":
+                return True
+    return False
+
+
+def _map_lambda_function(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    configuration: dict[str, Any] = {
+        "env_encrypted_with_cmk": bool(body.get("kms_key_arn")),
+        "function_url_auth_none": _function_url_auth_none(key[1], all_resources),
+    }
+    runtime = body.get("runtime")
+    if runtime is not None:
+        configuration["runtime"] = runtime
+    tracing = _first_block(body, "tracing_config")
+    configuration["xray_tracing_enabled"] = bool(tracing is not None and tracing.get("mode") == "Active")
+    return {
+        "provider": "aws",
+        "resource_type": "lambda_function",
+        "configuration": configuration,
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_lambda_function.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # EC2 instance (NG-AWS-EC2-010/011/023 -- the statically-knowable subset of
 # its 6 controls). Confirmed against controls/aws/ec2/*.py:
 #  - public_ip_address: forbid_flag (truthy = FAIL). From IaC we know INTENT,
@@ -544,6 +597,7 @@ _MAPPERS = {
     "aws_eks_cluster": _map_eks_cluster,
     "aws_dynamodb_table": _map_dynamodb_table,
     "aws_instance": _map_ec2_instance,
+    "aws_lambda_function": _map_lambda_function,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -557,6 +611,7 @@ _CONSUMED_ONLY = {
     "aws_iam_role_policy_attachment",
     "aws_iam_user_policy",
     "aws_iam_role_policy",
+    "aws_lambda_function_url",  # merged into its function's function_url_auth_none
 }
 
 

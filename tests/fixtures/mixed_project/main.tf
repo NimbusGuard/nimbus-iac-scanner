@@ -25,6 +25,6 @@ resource "aws_security_group" "open_ssh" {
   }
 }
 
-resource "aws_lambda_function" "fn" {
-  function_name = "unmapped-example"
+resource "aws_lambda_layer_version" "layer" {
+  layer_name = "unmapped-example"
 }

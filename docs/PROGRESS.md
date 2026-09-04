@@ -17,7 +17,7 @@
 
 ## Queue — AWS (38)
 - [x] ec2_instance (6 controls) -- partial: ssm_managed/secrets_detected omitted (not knowable from IaC)
-- [ ] lambda_function (6 controls)
+- [x] lambda_function (6 controls) -- TF also correlates function_url; resource_policy_allows_public/secrets_detected omitted
 - [ ] ecr_repository (4 controls)
 - [ ] cloudfront_distribution (4 controls)
 - [ ] iam_password_policy (3 controls)

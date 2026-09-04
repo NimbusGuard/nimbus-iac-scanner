@@ -27,7 +27,7 @@ def test_a_real_fail_result_exits_1_and_prints_the_control_id(capsys):
     assert exit_code == 1
     out = capsys.readouterr().out
     assert "NG-AWS-S3-001" in out
-    assert "aws_lambda_function" in out  # the unmapped-resource-types notice
+    assert "aws_lambda_layer_version" in out  # the unmapped-resource-types notice
 
 
 def test_a_clean_pass_exits_0(capsys):
@@ -60,8 +60,8 @@ def test_gate_check_error_exits_2(capsys):
 
 def test_no_mapped_resources_exits_0_without_calling_the_api(tmp_path):
     (tmp_path / "unmapped.tf").write_text('''
-resource "aws_lambda_function" "fn" {
-  function_name = "only-unmapped"
+resource "aws_lambda_layer_version" "lyr" {
+  layer_name = "only-unmapped"
 }
 ''')
     with patch("nimbus_iac_scanner.cli.run_gate_check") as mock_gate_check:
