@@ -193,6 +193,47 @@ def _map_rds_instance(key: ResourceKey, body: dict[str, Any], _all_resources) ->
 
 
 # ---------------------------------------------------------------------------
+# Load balancer (NG-AWS-ELB-001..007). Config shape confirmed against
+# controls/aws/elb/*.py: `scheme` ('internet-facing' | 'internal'), `type`
+# ('application'|'network'|'gateway'), `deletion_protection_enabled` (bool),
+# `access_logs_enabled` (bool). All four Terraform defaults confirmed
+# against the AWS provider's own aws_lb docs: `internal` defaults false ->
+# 'internet-facing'; `load_balancer_type` defaults 'application';
+# `enable_deletion_protection` defaults false; the `access_logs {}` block is
+# absent by default and its own `enabled` defaults false. Listener-level
+# checks (ELB-005 HTTP redirect) and WAF association (ELB-007) need separate
+# aws_lb_listener / aws_wafv2_web_acl_association resources not correlated
+# here -- those fields are OMITTED (a real gap, not fabricated), so their
+# controls read NOT_EVALUATED rather than a false verdict.
+# ---------------------------------------------------------------------------
+
+def _access_logs_enabled(body: dict[str, Any]) -> bool:
+    block = body.get("access_logs")
+    if isinstance(block, list):
+        block = block[0] if block else None
+    if not isinstance(block, dict):
+        return False
+    return bool(block.get("enabled", False))
+
+
+def _map_load_balancer(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "load_balancer",
+        "configuration": {
+            "scheme": "internal" if bool(body.get("internal", False)) else "internet-facing",
+            "type": body.get("load_balancer_type", "application"),
+            "deletion_protection_enabled": bool(body.get("enable_deletion_protection", False)),
+            "access_logs_enabled": _access_logs_enabled(body),
+        },
+        "tags": body.get("tags") or {},
+        # key[0] (aws_lb or its aws_alb alias) so the identifier reflects
+        # how the resource was actually declared.
+        "identifier": f"{key[0]}.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # KMS key rotation (NG-AWS-KMS-001) -- `key_manager` is always "CUSTOMER"
 # for a Terraform-declared key (a structural fact: AWS-managed keys are
 # never created as a Terraform resource, they're implicit per-service
@@ -372,6 +413,8 @@ _MAPPERS = {
     "aws_ebs_volume": _map_ebs_volume,
     "aws_iam_user": _map_iam_user,
     "aws_iam_role": _map_iam_role,
+    "aws_lb": _map_load_balancer,
+    "aws_alb": _map_load_balancer,  # legacy alias for aws_lb (same schema)
 }
 
 # Resources consumed BY another mapper above (merged into an owning

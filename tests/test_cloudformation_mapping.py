@@ -201,3 +201,68 @@ Resources:
 ''', is_yaml=True, file_key="t.yaml")
     assert map_resources(resources) == []
     assert unmapped_resource_types(resources) == {"AWS::Lambda::Function"}
+
+
+# --- load_balancer (NG-AWS-ELB-001..007) ----------------------------------
+
+def test_load_balancer_all_fields():
+    entry = map_resources(parse_source('''
+Resources:
+  PublicLb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Type: application
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: "true"
+        - Key: access_logs.s3.enabled
+          Value: "true"
+      Tags:
+        - Key: Environment
+          Value: prod
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["provider"] == "aws"
+    assert entry["resource_type"] == "load_balancer"
+    assert entry["configuration"] == {
+        "scheme": "internet-facing",
+        "type": "application",
+        "deletion_protection_enabled": True,
+        "access_logs_enabled": True,
+    }
+    assert entry["tags"] == {"Environment": "prod"}
+    assert entry["identifier"] == "AWS::ElasticLoadBalancingV2::LoadBalancer.PublicLb"
+
+
+def test_load_balancer_defaults_when_omitted():
+    entry = map_resources(parse_source('''
+Resources:
+  BareLb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: {}
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {
+        "scheme": "internet-facing",
+        "type": "application",
+        "deletion_protection_enabled": False,
+        "access_logs_enabled": False,
+    }
+
+
+def test_load_balancer_internal_and_attributes_false():
+    entry = map_resources(parse_source('''
+Resources:
+  InternalLb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internal
+      Type: network
+      LoadBalancerAttributes:
+        - Key: deletion_protection.enabled
+          Value: "false"
+''', is_yaml=True, file_key="t.yaml"))[0]
+    cfg = entry["configuration"]
+    assert cfg["scheme"] == "internal"
+    assert cfg["type"] == "network"
+    assert cfg["deletion_protection_enabled"] is False
+    assert cfg["access_logs_enabled"] is False

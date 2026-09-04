@@ -549,3 +549,86 @@ resource "aws_iam_role_policy" "inline" {
     mapped = map_resources(resources)
     assert len(mapped) == 1
     assert mapped[0]["resource_type"] == "iam_role"
+
+
+# --- load_balancer (NG-AWS-ELB-001..007) ----------------------------------
+
+def test_load_balancer_all_fields():
+    resources = parse_source('''
+resource "aws_lb" "public" {
+  name                       = "app-lb"
+  internal                   = false
+  load_balancer_type         = "application"
+  enable_deletion_protection = true
+
+  access_logs {
+    bucket  = "my-logs"
+    enabled = true
+  }
+
+  tags = { Environment = "prod" }
+}
+''')
+    entry = map_resources(resources)[0]
+    assert entry["provider"] == "aws"
+    assert entry["resource_type"] == "load_balancer"
+    assert entry["configuration"] == {
+        "scheme": "internet-facing",
+        "type": "application",
+        "deletion_protection_enabled": True,
+        "access_logs_enabled": True,
+    }
+    assert entry["tags"] == {"Environment": "prod"}
+    assert entry["identifier"] == "aws_lb.public"
+
+
+def test_load_balancer_defaults_when_omitted():
+    """internal absent -> internet-facing; type absent -> application;
+    deletion protection absent -> false; no access_logs block -> false."""
+    resources = parse_source('''
+resource "aws_lb" "bare" {
+  name = "bare-lb"
+}
+''')
+    entry = map_resources(resources)[0]
+    assert entry["configuration"] == {
+        "scheme": "internet-facing",
+        "type": "application",
+        "deletion_protection_enabled": False,
+        "access_logs_enabled": False,
+    }
+
+
+def test_load_balancer_internal_scheme_and_network_type():
+    resources = parse_source('''
+resource "aws_lb" "internal_nlb" {
+  internal           = true
+  load_balancer_type = "network"
+}
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert cfg["scheme"] == "internal"
+    assert cfg["type"] == "network"
+
+
+def test_load_balancer_access_logs_disabled_block():
+    resources = parse_source('''
+resource "aws_lb" "logs_off" {
+  access_logs {
+    bucket  = "b"
+    enabled = false
+  }
+}
+''')
+    assert map_resources(resources)[0]["configuration"]["access_logs_enabled"] is False
+
+
+def test_aws_alb_alias_maps_and_identifier_reflects_declared_type():
+    resources = parse_source('''
+resource "aws_alb" "legacy" {
+  internal = false
+}
+''')
+    entry = map_resources(resources)[0]
+    assert entry["resource_type"] == "load_balancer"
+    assert entry["identifier"] == "aws_alb.legacy"

@@ -237,6 +237,42 @@ def _map_iam_user(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
 # Registry keyed by the real CFN "Type" string -- same "registry over
 # hardcoded chain" shape resource_mapping.py's own _MAPPERS already
 # establishes.
+
+# ---------------------------------------------------------------------------
+# Load balancer (NG-AWS-ELB-001..007). Scheme/Type are direct properties
+# (defaults 'internet-facing'/'application' per AWS's own CFN docs);
+# deletion_protection.enabled and access_logs.s3.enabled live in the
+# LoadBalancerAttributes list of {Key, Value} (Value a "true"/"false"
+# STRING), absent -> false. Listener/WAF-level checks aren't correlated
+# (their fields omitted, so those controls read NOT_EVALUATED).
+# ---------------------------------------------------------------------------
+
+def _lb_attribute_bool(attributes: Any, key_name: str) -> bool:
+    if not isinstance(attributes, list):
+        return False
+    for attr in attributes:
+        if isinstance(attr, dict) and attr.get("Key") == key_name:
+            return str(attr.get("Value")).lower() == "true"
+    return False
+
+
+def _map_load_balancer(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    attributes = properties.get("LoadBalancerAttributes")
+    return {
+        "provider": "aws",
+        "resource_type": "load_balancer",
+        "configuration": {
+            "scheme": properties.get("Scheme", "internet-facing"),
+            "type": properties.get("Type", "application"),
+            "deletion_protection_enabled": _lb_attribute_bool(attributes, "deletion_protection.enabled"),
+            "access_logs_enabled": _lb_attribute_bool(attributes, "access_logs.s3.enabled"),
+        },
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::ElasticLoadBalancingV2::LoadBalancer.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "AWS::S3::Bucket": _map_s3_bucket,
     "AWS::EC2::SecurityGroup": _map_security_group,
@@ -246,6 +282,7 @@ _MAPPERS = {
     "AWS::EC2::Volume": _map_ebs_volume,
     "AWS::IAM::Role": _map_iam_role,
     "AWS::IAM::User": _map_iam_user,
+    "AWS::ElasticLoadBalancingV2::LoadBalancer": _map_load_balancer,
 }
 
 
