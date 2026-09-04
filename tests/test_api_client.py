@@ -129,3 +129,20 @@ def test_block_severity_none_when_absent():
     with patch("nimbus_iac_scanner.api_client.requests.post", return_value=_fake_response(200, body)):
         result = run_gate_check("https://api.example.com", "key", [{"provider": "aws", "resource_type": "s3_bucket"}])
     assert result.block_severity is None
+
+
+def test_ignores_are_sent_in_the_request_body():
+    body = {"passed": True, "results": [], "excepted_count": 0, "warnings": []}
+    ignores = [{"control_id": "NG-AWS-S3-001", "identifier": "aws_s3_bucket.data", "source": "inline"}]
+    with patch("nimbus_iac_scanner.api_client.requests.post", return_value=_fake_response(200, body)) as mock_post:
+        run_gate_check("https://api.example.com", "k", [{"provider": "aws", "resource_type": "s3_bucket"}], ignores=ignores)
+    _, kwargs = mock_post.call_args
+    assert kwargs["json"]["ignores"] == ignores
+
+
+def test_excepted_count_and_warnings_are_collected():
+    body = {"passed": True, "results": [{"status": "FAIL", "excepted": True}], "excepted_count": 1, "warnings": ["rejected: X"]}
+    with patch("nimbus_iac_scanner.api_client.requests.post", return_value=_fake_response(200, body)):
+        result = run_gate_check("https://api.example.com", "k", [{"provider": "aws", "resource_type": "s3_bucket"}])
+    assert result.passed is True and result.excepted_count == 1
+    assert result.warnings == ["rejected: X"]

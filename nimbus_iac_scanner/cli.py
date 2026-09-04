@@ -26,6 +26,7 @@ from nimbus_iac_scanner.ci_source import collect_ci_source
 from nimbus_iac_scanner.git_diff import DiffError, changed_files as git_changed_files
 from nimbus_iac_scanner.bicep_parser import BicepCliNotFoundError, BicepCompileError
 from nimbus_iac_scanner import bicep_mapping, bicep_parser
+from nimbus_iac_scanner.ignore_directives import resolve_directives
 from nimbus_iac_scanner.mr_comment import MrCommentError, find_merge_request_iid
 from nimbus_iac_scanner.mr_comment import post_or_update_comment as post_or_update_mr_comment
 from nimbus_iac_scanner.pr_comment import PrCommentError, find_pull_request_number
@@ -78,6 +79,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "The base git ref to diff against for --changed-only (e.g. origin/main). "
             "Defaults to the CI's own PR/MR base, or HEAD~1 outside a PR."
         ),
+    )
+    parser.add_argument(
+        "--nimbusignore", default=None,
+        help="Path to a .nimbusignore file (default: auto-discovered by walking up from --path to the repo root).",
+    )
+    parser.add_argument(
+        "--no-inline-ignores", action="store_true",
+        help="Ignore any '# nimbus:ignore' inline comments (still honors a .nimbusignore file). The platform can also disable inline ignores org-wide.",
     )
     return parser
 
@@ -152,8 +161,18 @@ def main(argv: list[str] | None = None) -> int:
     source["scan_path"] = args.path
     source["is_partial"] = bool(args.changed_only)
 
+    # Developer self-service suppression from the repo itself: inline
+    # '# nimbus:ignore' comments + a .nimbusignore file. The CLI only
+    # RESOLVES these; the platform (the single evaluator) decides, per its
+    # own governance, which actually apply.
+    ignores = resolve_directives(
+        args.path, mapped,
+        inline_enabled=not args.no_inline_ignores,
+        nimbusignore_override=args.nimbusignore,
+    )
+
     try:
-        result = run_gate_check(args.api_url, args.api_key, mapped, source=source)
+        result = run_gate_check(args.api_url, args.api_key, mapped, source=source, ignores=ignores)
     except GateCheckError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -163,6 +182,12 @@ def main(argv: list[str] | None = None) -> int:
     # doesn't.
     report = format_report(result.results, unmapped)
     print(report)
+    # Directives the platform did NOT apply (invalid, expired, or rejected
+    # by org governance -- e.g. an inline ignore of a CRITICAL when the org
+    # caps inline suppression) -- surfaced so a developer knows their ignore
+    # didn't take and the finding still blocks. Never affects the exit code.
+    for w in result.warnings:
+        print(f"warning: {w}", file=sys.stderr)
     if result.scan_ids:
         # A link back to the persisted run(s) in the NimbusGuard UI --
         # one line, informational, never affects the exit code.

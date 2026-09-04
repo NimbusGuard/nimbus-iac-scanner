@@ -130,3 +130,42 @@ def test_markdown_no_link_without_blob_base_or_absolute_path():
     # no blob base (local run) -> plain code, no link
     md2 = format_markdown_report([_fail("r", "C", "LOW", "m")], set(), {"r": {"file": "a.tf", "line": 1}}, None)
     assert "](http" not in md2
+
+
+# --- exceptions/ignored (an excepted FAIL never blocks, shown separately) ---
+
+def test_should_fail_build_skips_an_excepted_fail():
+    results = [{"status": "FAIL", "severity": "CRITICAL", "excepted": True}]
+    assert should_fail_build(results) is False  # excepted -> doesn't block
+
+
+def test_should_fail_build_still_blocks_a_non_excepted_fail_alongside():
+    results = [
+        {"status": "FAIL", "severity": "CRITICAL", "excepted": True},
+        {"status": "FAIL", "severity": "LOW", "excepted": False},
+    ]
+    assert should_fail_build(results) is True
+
+
+def test_format_report_shows_ignored_section():
+    results = [{
+        "identifier": "aws_s3_bucket.legacy", "control_id": "NG-AWS-S3-001",
+        "control_name": "S3 public access", "status": "FAIL", "severity": "CRITICAL",
+        "excepted": True, "exception_reason": "risk_accepted", "exception_source": "nimbusignore",
+    }]
+    out = format_report(results, set())
+    assert "IGNORED (1)" in out
+    assert "risk_accepted via nimbusignore" in out
+    assert "failed (0), ignored (1)" in out
+
+
+def test_markdown_excepted_fail_is_not_blocking_and_in_ignored_section():
+    results = [{
+        "identifier": "aws_s3_bucket.legacy", "control_id": "NG-AWS-S3-001",
+        "control_name": "S3 public access", "status": "FAIL", "severity": "CRITICAL",
+        "excepted": True, "exception_reason": "false_positive", "exception_source": "inline",
+    }]
+    md = format_markdown_report(results, set())
+    assert "✅ Passed" in md            # no BLOCKING finding
+    assert "1 ignored" in md
+    assert "false_positive via inline" in md

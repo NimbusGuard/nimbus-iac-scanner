@@ -26,6 +26,11 @@ def should_fail_build(results: list[dict[str, Any]], min_severity: Optional[str]
     for r in results:
         if r.get("status") != "FAIL":
             continue
+        # An excepted FAIL (a stored exception rule or an inline/.nimbusignore
+        # directive the server accepted) never blocks -- the server already
+        # decided it doesn't, and the gate must stay consistent with that.
+        if r.get("excepted"):
+            continue
         if threshold is None:
             return True
         severity = r.get("severity")
@@ -37,7 +42,9 @@ def should_fail_build(results: list[dict[str, Any]], min_severity: Optional[str]
 
 def format_report(results: list[dict[str, Any]], unmapped_resource_types: set[str]) -> str:
     lines = []
-    failing = [r for r in results if r.get("status") == "FAIL"]
+    all_fail = [r for r in results if r.get("status") == "FAIL"]
+    failing = [r for r in all_fail if not r.get("excepted")]
+    ignored = [r for r in all_fail if r.get("excepted")]
     other = [r for r in results if r.get("status") != "FAIL"]
 
     if failing:
@@ -50,8 +57,19 @@ def format_report(results: list[dict[str, Any]], unmapped_resource_types: set[st
             if r.get("message"):
                 lines.append(f"      {r['message']}")
 
+    if ignored:
+        lines.append("")
+        lines.append(f"IGNORED ({len(ignored)}) -- a real FAIL, suppressed by an exception (does not block):")
+        for r in sorted(ignored, key=lambda r: (r.get("identifier") or "", r.get("control_id") or "")):
+            reason = r.get("exception_reason") or "excepted"
+            src = r.get("exception_source") or ""
+            lines.append(
+                f"  [{r.get('severity') or 'UNKNOWN'}] {r.get('identifier') or '(no identifier)'} "
+                f"-- {r.get('control_id')} ({reason} via {src})"
+            )
+
     lines.append("")
-    lines.append(f"Passed/other ({len(other)}), failed ({len(failing)}).")
+    lines.append(f"Passed/other ({len(other)}), failed ({len(failing)}), ignored ({len(ignored)}).")
 
     if unmapped_resource_types:
         lines.append("")
@@ -120,19 +138,42 @@ def format_markdown_report(
 ) -> str:
     from collections import Counter
 
-    failing = [r for r in results if r.get("status") == "FAIL"]
+    all_fail = [r for r in results if r.get("status") == "FAIL"]
+    blocking = [r for r in all_fail if not r.get("excepted")]
+    ignored = [r for r in all_fail if r.get("excepted")]
 
-    if not failing:
-        out = ["**✅ Passed** — no misconfigurations found in the evaluated resources."]
-        if unmapped_resource_types:
-            out += ["", f"<sub>{len(unmapped_resource_types)} resource type(s) aren't mapped to a control yet and were not evaluated.</sub>"]
-        return "\n".join(out)
+    def sort_key(r: dict[str, Any]) -> tuple:
+        return (-SEVERITY_RANK.get(r.get("severity"), -1), r.get("identifier") or "", r.get("control_id") or "")
 
-    counts = Counter(r.get("severity") or "UNKNOWN" for r in failing)
+    def _ignored_section() -> list[str]:
+        if not ignored:
+            return []
+        rows = [f"<details><summary><b>{len(ignored)} ignored (suppressed by an exception, not blocking)</b></summary>", "",
+                "| Severity | Resource | Control | Suppressed by |", "|:--|:--|:--|:--|"]
+        for r in sorted(ignored, key=sort_key):
+            badge = _SEVERITY_BADGE.get(r.get("severity") or "UNKNOWN", r.get("severity") or "UNKNOWN")
+            resource = _resource_link(r.get("identifier"), source_by_identifier, blob_base)
+            src = _md_cell(f"{r.get('exception_reason') or 'excepted'} via {r.get('exception_source') or '—'}")
+            rows.append(f"| {badge} | {resource} | `{_md_cell(r.get('control_id') or '—')}` | {src} |")
+        rows += ["", "</details>"]
+        return ["", *rows]
+
+    def _unmapped_note() -> list[str]:
+        if not unmapped_resource_types:
+            return []
+        return ["", f"<sub>{len(unmapped_resource_types)} resource type(s) aren't mapped to a control yet and were not evaluated.</sub>"]
+
+    if not blocking:
+        head = "**✅ Passed** — no blocking misconfigurations found in the evaluated resources."
+        if ignored:
+            head += f" <sub>({len(ignored)} finding{'s' if len(ignored) != 1 else ''} ignored via an exception.)</sub>"
+        return "\n".join([head, *_ignored_section(), *_unmapped_note()])
+
+    counts = Counter(r.get("severity") or "UNKNOWN" for r in blocking)
     present = [s for s in _SEVERITY_ORDER if counts.get(s)]
 
     out: list[str] = [
-        f"**❌ Blocking — {len(failing)} finding{'s' if len(failing) != 1 else ''}** "
+        f"**❌ Blocking — {len(blocking)} finding{'s' if len(blocking) != 1 else ''}** "
         f"({len(results)} checks evaluated).",
         "",
     ]
@@ -142,14 +183,11 @@ def format_markdown_report(
         out.append("| " + " | ".join(f"**{counts[s]}**" for s in present) + " |")
         out.append("")
 
-    def sort_key(r: dict[str, Any]) -> tuple:
-        return (-SEVERITY_RANK.get(r.get("severity"), -1), r.get("identifier") or "", r.get("control_id") or "")
-
-    out.append(f"<details><summary><b>View all {len(failing)} findings</b></summary>")
+    out.append(f"<details><summary><b>View all {len(blocking)} findings</b></summary>")
     out.append("")
     out.append("| Severity | Resource | Control | Issue |")
     out.append("|:--|:--|:--|:--|")
-    for r in sorted(failing, key=sort_key):
+    for r in sorted(blocking, key=sort_key):
         sev = r.get("severity") or "UNKNOWN"
         badge = _SEVERITY_BADGE.get(sev, sev)
         issue = r.get("message") or r.get("control_name") or ""
@@ -159,8 +197,7 @@ def format_markdown_report(
             f"| `{_md_cell(r.get('control_id') or '—')}` | {_md_cell(issue)} |"
         )
     out += ["", "</details>"]
-
-    if unmapped_resource_types:
-        out += ["", f"<sub>{len(unmapped_resource_types)} resource type(s) aren't mapped to a control yet and were not evaluated.</sub>"]
+    out += _ignored_section()
+    out += _unmapped_note()
 
     return "\n".join(out)

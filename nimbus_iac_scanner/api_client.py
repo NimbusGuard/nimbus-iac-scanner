@@ -38,6 +38,15 @@ class GateCheckResult:
     # FAIL blocks". Every batch of one run returns the same value (same
     # org); the last non-None wins.
     block_severity: Optional[str] = None
+    # How many FAIL results the server suppressed via an exception (a
+    # stored rule or an inline/.nimbusignore directive). An excepted FAIL
+    # is still in `results` (marked `excepted: true`) -- it just doesn't
+    # block. Summed across batches.
+    excepted_count: int = 0
+    # Human-readable notes about directives the server did NOT apply
+    # (invalid, expired, or rejected by org governance) -- the CLI surfaces
+    # these so a developer knows their inline ignore didn't take.
+    warnings: list[str] = field(default_factory=list)
 
 
 def run_gate_check(
@@ -45,6 +54,7 @@ def run_gate_check(
     api_key: str,
     resources: list[dict[str, Any]],
     source: Optional[dict[str, Any]] = None,
+    ignores: Optional[list[dict[str, Any]]] = None,
 ) -> GateCheckResult:
     """`api_url` is the base nimbus_app API URL (e.g.
     `https://api.nimbusguard.io/v1` or a local dev URL) -- this function
@@ -60,11 +70,18 @@ def run_gate_check(
     all_results: list[dict[str, Any]] = []
     scan_ids: list[str] = []
     block_severity: Optional[str] = None
+    excepted_count = 0
+    warnings: list[str] = []
     for i in range(0, len(resources), GATE_CHECK_BATCH_SIZE):
         batch = resources[i:i + GATE_CHECK_BATCH_SIZE]
         request_body: dict[str, Any] = {"resources": batch}
         if source is not None:
             request_body["source"] = source
+        # The repo's inline/.nimbusignore directives -- sent on EVERY batch
+        # (like `source`), the server matches each against that batch's
+        # resources; a directive matching nothing in a batch is simply inert.
+        if ignores:
+            request_body["ignores"] = ignores
         try:
             response = requests.post(
                 f"{api_url.rstrip('/')}/iac/gate-check",
@@ -93,5 +110,10 @@ def run_gate_check(
             scan_ids.append(str(scan_id))
         if body.get("block_severity") is not None:
             block_severity = body["block_severity"]
+        excepted_count += int(body.get("excepted_count") or 0)
+        warnings.extend(body.get("warnings") or [])
 
-    return GateCheckResult(passed=passed, results=all_results, scan_ids=scan_ids, block_severity=block_severity)
+    return GateCheckResult(
+        passed=passed, results=all_results, scan_ids=scan_ids, block_severity=block_severity,
+        excepted_count=excepted_count, warnings=warnings,
+    )

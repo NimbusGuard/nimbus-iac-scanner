@@ -74,6 +74,53 @@ with the base ref available — if the diff genuinely can't be computed
 couldn't run as requested) rather than silently full-scanning. A PR that
 changes no IaC files exits `0` cleanly.
 
+### Suppressing a finding (exceptions)
+
+A finding you've decided is a false positive or an accepted risk can be
+**suppressed** so it no longer blocks the build. A suppressed finding is
+still a real FAIL — it's recorded and visible in NimbusGuard, just not
+blocking. Two developer-self-service ways live in your own repo (both are
+re-read from source every run, like `.gitignore`):
+
+**Inline comment** — on the resource's own declaration line, or the
+comment line(s) directly above it:
+
+```hcl
+# nimbus:ignore NG-AWS-S3-001 reason=false_positive note="internal, not internet-facing"
+resource "aws_s3_bucket" "public_docs" { ... }
+
+# nimbus:ignore NG-AWS-RDS-002 reason=risk_accepted expires=2026-12-31
+resource "aws_db_instance" "legacy" { ... }
+```
+
+`<CONTROL_ID>` is exact (e.g. `NG-AWS-S3-001`) or `*` (all controls on that
+resource). `reason=` is `false_positive` (may be permanent),
+`risk_accepted`, or `compensating_control` (the last two **require**
+`expires=YYYY-MM-DD`). `#` and `//` comment markers both work.
+
+**`.nimbusignore` file** (repo root) — one directive per line, for
+pattern/bulk suppression without touching the resource:
+
+```
+# <control-id|*> <address-glob> [reason=...] [expires=YYYY-MM-DD] [file=<path-glob>] [note="..."]
+NG-AWS-S3-001 aws_s3_bucket.legacy_* reason=risk_accepted expires=2026-12-31 note="migrating Q4"
+NG-AZURE-STORAGE-001 * file=modules/sandbox/*.bicep reason=false_positive
+```
+
+**Central, audited exceptions** — a security lead can instead create a
+governed exception on the platform (`POST /iac/exceptions`, or the
+"except" action on a tracked finding), which applies across every run of a
+repo/branch without editing the repo. These are RBAC-gated
+(`manage_finding_exceptions`).
+
+**Governance of inline self-service** — because inline/`.nimbusignore`
+directives bypass platform RBAC, an org admin can constrain them:
+`--no-inline-ignores` disables inline comments for one run, and the
+platform has an org-wide kill-switch plus a max-severity cap (e.g. an
+inline directive can never silence a CRITICAL). A directive the platform
+rejects (invalid, expired, or over the cap) still blocks and is reported
+as a `warning:` line.
+
 ## GitHub Actions
 
 ```yaml

@@ -208,3 +208,61 @@ def test_changed_only_empty_diff_exits_0_without_calling_the_api(tmp_path):
         exit_code = main(["--path", str(tmp_path), "--changed-only", "--api-url", "https://api.example.com", "--api-key", "k"])
     assert exit_code == 0
     mock_run.assert_not_called()
+
+
+def test_inline_ignore_is_resolved_and_sent_and_makes_the_build_pass(tmp_path):
+    # a real, mappable Terraform resource with an inline ignore above it
+    (tmp_path / "main.tf").write_text(
+        "# nimbus:ignore NG-AWS-S3-001 reason=false_positive\n"
+        'resource "aws_s3_bucket" "data" {\n'
+        "  bucket = \"x\"\n"
+        "}\n"
+    )
+    captured = {}
+
+    def _fake(api_url, api_key, resources, source=None, ignores=None):
+        captured["ignores"] = ignores
+        # the server would mark the matching FAIL excepted -> non-blocking
+        return GateCheckResult(
+            passed=True, excepted_count=1,
+            results=[{
+                "identifier": "aws_s3_bucket.data", "resource_type": "s3_bucket",
+                "control_id": "NG-AWS-S3-001", "control_name": "S3 public access",
+                "status": "FAIL", "severity": "CRITICAL", "message": "public",
+                "excepted": True, "exception_reason": "false_positive", "exception_source": "inline",
+            }],
+        )
+
+    with patch("nimbus_iac_scanner.cli.run_gate_check", side_effect=_fake):
+        exit_code = main(["--path", str(tmp_path), "--api-url", "https://api.example.com", "--api-key", "k"])
+    assert exit_code == 0  # the only FAIL was excepted
+    assert captured["ignores"] == [{"control_id": "NG-AWS-S3-001", "source": "inline", "identifier": "aws_s3_bucket.data", "reason_type": "false_positive"}]
+
+
+def test_no_inline_ignores_flag_stops_sending_inline_directives(tmp_path):
+    (tmp_path / "main.tf").write_text(
+        "# nimbus:ignore NG-AWS-S3-001\n"
+        'resource "aws_s3_bucket" "data" {\n  bucket = "x"\n}\n'
+    )
+    captured = {}
+
+    def _fake(api_url, api_key, resources, source=None, ignores=None):
+        captured["ignores"] = ignores
+        return GateCheckResult(passed=True, results=[])
+
+    with patch("nimbus_iac_scanner.cli.run_gate_check", side_effect=_fake):
+        main(["--path", str(tmp_path), "--api-url", "https://api.example.com", "--api-key", "k", "--no-inline-ignores"])
+    assert captured["ignores"] == []
+
+
+def test_server_warnings_are_printed(capsys, tmp_path):
+    (tmp_path / "main.tf").write_text('resource "aws_s3_bucket" "data" {\n  bucket = "x"\n}\n')
+    fake = GateCheckResult(
+        passed=False, warnings=["Inline ignore of NG-AWS-S3-001 rejected: severity 'CRITICAL' exceeds ..."],
+        results=[{"identifier": "aws_s3_bucket.data", "control_id": "NG-AWS-S3-001", "status": "FAIL", "severity": "CRITICAL", "message": "x"}],
+    )
+    with patch("nimbus_iac_scanner.cli.run_gate_check", return_value=fake):
+        exit_code = main(["--path", str(tmp_path), "--api-url", "https://api.example.com", "--api-key", "k"])
+    assert exit_code == 1  # the rejected inline still blocks
+    err = capsys.readouterr().err
+    assert "rejected: severity 'CRITICAL'" in err
