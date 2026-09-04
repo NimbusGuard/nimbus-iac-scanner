@@ -806,6 +806,94 @@ def _map_athena_workgroup(key: ResourceKey, body: dict[str, Any], _all_resources
 
 
 # ---------------------------------------------------------------------------
+# Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
+# the flattened rule list from describe_network_acls, and matches protocol
+# by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
+# mapper normalizes Terraform's own protocol name/number to the numeric
+# form. Entries come from both inline ingress/egress blocks and standalone
+# aws_network_acl_rule resources referencing this ACL. NO CloudFormation
+# mapper: AWS::EC2::NetworkAclEntry entries are separate resources with no
+# cross-resource view in the CFN mapper, and emitting an empty entries list
+# would be a false PASS -- so a CFN network ACL is left unmapped (honest)
+# rather than fabricated as having no rules.
+# ---------------------------------------------------------------------------
+
+_NACL_PROTOCOL_NUMBERS = {"tcp": "6", "udp": "17", "icmp": "1", "icmpv6": "58", "58": "58", "all": "-1", "-1": "-1"}
+
+
+def _as_block_list(raw: Any) -> list[dict[str, Any]]:
+    if isinstance(raw, list):
+        return [b for b in raw if isinstance(b, dict)]
+    if isinstance(raw, dict):
+        return [raw]
+    return []
+
+
+def _nacl_protocol(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return _NACL_PROTOCOL_NUMBERS.get(str(value).lower(), str(value))
+
+
+def _nacl_entry_from_block(block: dict[str, Any], egress: bool) -> dict[str, Any]:
+    return {
+        "rule_number": block.get("rule_no"),
+        "egress": egress,
+        "protocol": _nacl_protocol(block.get("protocol")),
+        "rule_action": block.get("action"),
+        "cidr_block": block.get("cidr_block") or block.get("ipv6_cidr_block"),
+        "from_port": block.get("from_port"),
+        "to_port": block.get("to_port"),
+    }
+
+
+def _nacl_entry_from_rule(rule: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "rule_number": rule.get("rule_number"),
+        "egress": bool(rule.get("egress", False)),
+        "protocol": _nacl_protocol(rule.get("protocol")),
+        "rule_action": rule.get("rule_action"),
+        "cidr_block": rule.get("cidr_block") or rule.get("ipv6_cidr_block"),
+        "from_port": rule.get("from_port"),
+        "to_port": rule.get("to_port"),
+    }
+
+
+def _map_network_acl(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    entries = [_nacl_entry_from_block(b, False) for b in _as_block_list(body.get("ingress"))]
+    entries.extend(_nacl_entry_from_block(b, True) for b in _as_block_list(body.get("egress")))
+    for (resource_type, _name), rule in all_resources.items():
+        if resource_type != "aws_network_acl_rule":
+            continue
+        ref = resolve_reference(rule.get("network_acl_id"))
+        if (ref is not None and ref[0] == "aws_network_acl" and ref[1] == key[1]) or rule.get("network_acl_id") == key[1]:
+            entries.append(_nacl_entry_from_rule(rule))
+    return {
+        "provider": "aws",
+        "resource_type": "network_acl",
+        "configuration": {"entries": entries},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_network_acl.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Route53 registered domain (NG-AWS-ROUTE53-002): transfer_lock_enabled.
+# Terraform's aws_route53domains_registered_domain.transfer_lock defaults to
+# true. No CloudFormation resource type exists for a registered domain.
+# ---------------------------------------------------------------------------
+
+def _map_route53_domain(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "route53_domain",
+        "configuration": {"transfer_lock_enabled": bool(body.get("transfer_lock", True))},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_route53domains_registered_domain.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # API Gateway stage (NG-AWS-APIGATEWAY-001/002/003).
 #   xray_tracing_enabled   = the stage's own xray_tracing_enabled (direct)
 #   execution_logging_enabled = an aws_api_gateway_method_settings for this
@@ -1318,6 +1406,8 @@ _MAPPERS = {
     "aws_vpc": _map_vpc,
     "aws_route53_zone": _map_route53_hosted_zone,
     "aws_api_gateway_stage": _map_api_gateway_stage,
+    "aws_network_acl": _map_network_acl,
+    "aws_route53domains_registered_domain": _map_route53_domain,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -1341,6 +1431,7 @@ _CONSUMED_ONLY = {
     "aws_route53_query_log",  # merged into its zone's query_logging_enabled
     "aws_api_gateway_method_settings",  # merged into a stage's execution_logging_enabled
     "aws_wafv2_web_acl_association",  # merged into a stage's waf_attached
+    "aws_network_acl_rule",  # merged into its NACL's entries
 }
 
 

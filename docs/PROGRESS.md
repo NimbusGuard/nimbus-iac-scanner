@@ -42,7 +42,7 @@
 - [x] ecs_cluster (1 control)
 - [x] vpc (1 control) -- flow_logs via cross-resource aws_flow_log; TF only
 - [x] subnet (1 control)
-- [ ] network_acl (1 controls)
+- [x] network_acl (1 control) -- TF only (CFN entries are separate NetworkAclEntry resources; empty list would false-PASS)
 - [x] route53_hosted_zone (1 control) -- TF cross-resource query-log; CFN QueryLoggingConfig
 - [x] kinesis_stream (1 control)
 - [x] firehose_delivery_stream (1 control)
@@ -52,8 +52,8 @@
 - [x] dms_replication_instance (1 control) -- publicly_accessible default true
 - [x] mq_broker (1 control)
 - [x] codebuild_project (1 control)
-- [ ] route53_domain (1 controls)
-- [ ] * (1 controls)
+- [x] route53_domain (1 control) -- TF only (no CFN registered-domain resource)
+- [x] * -- N/A: the wildcard target is the vulnerability/side-channel control family, not an IaC-declarable resource type
 
 ## Queue — Azure (30, via Terraform azurerm_* + Bicep)
 - [ ] network_security_group (16 controls)

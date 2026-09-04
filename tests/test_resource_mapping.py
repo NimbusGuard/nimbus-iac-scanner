@@ -1406,3 +1406,76 @@ resource "aws_api_gateway_method_settings" "all" {
 ''')
     entry = [e for e in map_resources(resources) if e["resource_type"] == "api_gateway_stage"][0]
     assert entry["configuration"]["execution_logging_enabled"] is False
+
+
+# --- network_acl (NG-AWS-EC2-024) -----------------------------------------
+
+def test_network_acl_inline_ingress_normalizes_protocol_to_number():
+    resources = parse_source('''
+resource "aws_network_acl" "acl" {
+  vpc_id = "vpc-1"
+  ingress {
+    rule_no    = 100
+    action     = "allow"
+    protocol   = "tcp"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 22
+    to_port    = 22
+  }
+  egress {
+    rule_no    = 100
+    action     = "allow"
+    protocol   = "-1"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+  }
+}
+''')
+    entries = map_resources(resources)[0]["configuration"]["entries"]
+    ingress = [e for e in entries if not e["egress"]][0]
+    assert ingress == {
+        "rule_number": 100, "egress": False, "protocol": "6", "rule_action": "allow",
+        "cidr_block": "0.0.0.0/0", "from_port": 22, "to_port": 22,
+    }
+    egress = [e for e in entries if e["egress"]][0]
+    assert egress["protocol"] == "-1" and egress["egress"] is True
+
+
+def test_network_acl_merges_standalone_rules():
+    resources = parse_source('''
+resource "aws_network_acl" "acl" { vpc_id = "vpc-1" }
+resource "aws_network_acl_rule" "r" {
+  network_acl_id = aws_network_acl.acl.id
+  rule_number    = 200
+  egress         = false
+  protocol       = "6"
+  rule_action    = "deny"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 3389
+  to_port        = 3389
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "network_acl"][0]
+    assert entry["configuration"]["entries"] == [{
+        "rule_number": 200, "egress": False, "protocol": "6", "rule_action": "deny",
+        "cidr_block": "0.0.0.0/0", "from_port": 3389, "to_port": 3389,
+    }]
+    # the standalone rule resource is never emitted on its own
+    assert all(e["resource_type"] == "network_acl" for e in map_resources(resources))
+
+
+def test_network_acl_empty_has_empty_entries():
+    resources = parse_source('resource "aws_network_acl" "acl" { vpc_id = "vpc-1" }')
+    assert map_resources(resources)[0]["configuration"]["entries"] == []
+
+
+# --- route53_domain (NG-AWS-ROUTE53-002) ----------------------------------
+
+def test_route53_domain_transfer_lock_default_true_and_explicit_false():
+    assert map_resources(parse_source('''
+resource "aws_route53domains_registered_domain" "d" { domain_name = "example.com" }
+'''))[0]["configuration"] == {"transfer_lock_enabled": True}
+    assert map_resources(parse_source('''
+resource "aws_route53domains_registered_domain" "d" { domain_name = "example.com" transfer_lock = false }
+'''))[0]["configuration"] == {"transfer_lock_enabled": False}
