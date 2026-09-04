@@ -1117,6 +1117,62 @@ def _map_azure_key_vault_secret(key: ResourceKey, body: dict[str, Any], _all_res
 
 
 # ---------------------------------------------------------------------------
+# Managed disk (NG-AZURE-COMPUTE-002/003). The collector emits string fields:
+# public_network_access ("Enabled"/"Disabled", default "Enabled") and
+# network_access_policy (default "AllowAll"). `attached` (COMPUTE-001) is a
+# runtime state (disk.managed_by) not declarable on the disk resource ->
+# omitted. SQL database (NG-AZURE-SQL-009/010): backup_storage_redundancy is
+# the API enum (Geo/Local/Zone/GeoZone); azurerm storage_account_type
+# (GRS/LRS/ZRS/GZRS, default GRS) maps to it. ledger_enabled default false.
+# Storage container (NG-AZURE-STORAGE-012): public_access is the API enum
+# (None/Blob/Container); azurerm container_access_type (private/blob/
+# container, default private) maps to it.
+# ---------------------------------------------------------------------------
+
+_SQL_REDUNDANCY = {"GRS": "Geo", "LRS": "Local", "ZRS": "Zone", "GZRS": "GeoZone"}
+_CONTAINER_ACCESS = {"private": "None", "blob": "Blob", "container": "Container"}
+
+
+def _map_azure_managed_disk(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    pub = body.get("public_network_access_enabled", True)
+    return {
+        "provider": "azure",
+        "resource_type": "managed_disk",
+        "configuration": {
+            "public_network_access": "Enabled" if bool(pub) else "Disabled",
+            "network_access_policy": str(body.get("network_access_policy") or "AllowAll"),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_managed_disk.{key[1]}",
+    }
+
+
+def _map_azure_sql_database(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    sat = str(body.get("storage_account_type") or "GRS").upper()
+    return {
+        "provider": "azure",
+        "resource_type": "sql_database",
+        "configuration": {
+            "backup_storage_redundancy": _SQL_REDUNDANCY.get(sat, "Geo"),
+            "ledger_enabled": bool(body.get("ledger_enabled", False)),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_mssql_database.{key[1]}",
+    }
+
+
+def _map_azure_storage_container(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    access = str(body.get("container_access_type") or "private").lower()
+    return {
+        "provider": "azure",
+        "resource_type": "storage_container",
+        "configuration": {"public_access": _CONTAINER_ACCESS.get(access, "None")},
+        "tags": {},  # storage containers carry no tags
+        "identifier": f"azurerm_storage_container.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -1734,6 +1790,9 @@ _MAPPERS = {
     "azurerm_api_management": _map_azure_api_management,
     "azurerm_key_vault_key": _map_azure_key_vault_key,
     "azurerm_key_vault_secret": _map_azure_key_vault_secret,
+    "azurerm_managed_disk": _map_azure_managed_disk,
+    "azurerm_mssql_database": _map_azure_sql_database,
+    "azurerm_storage_container": _map_azure_storage_container,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

@@ -245,6 +245,29 @@ def _map_key_vault_secret(key: tuple[str, str], resource: dict[str, Any]) -> dic
     }, "tags": resource.get("tags") or {}, "identifier": f"Microsoft.KeyVault/vaults/secrets.{key[1]}"}
 
 
+def _map_managed_disk(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    return {"provider": "azure", "resource_type": "managed_disk", "configuration": {
+        "public_network_access": str(p.get("publicNetworkAccess") or "Enabled"),
+        "network_access_policy": str(p.get("networkAccessPolicy") or "AllowAll"),
+    }, "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Compute/disks.{key[1]}"}
+
+
+def _map_sql_database(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    return {"provider": "azure", "resource_type": "sql_database", "configuration": {
+        "backup_storage_redundancy": str(p.get("requestedBackupStorageRedundancy") or "Geo"),
+        "ledger_enabled": bool(p.get("ledgerOn", False)),
+    }, "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Sql/servers/databases.{key[1]}"}
+
+
+def _map_storage_container(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    return {"provider": "azure", "resource_type": "storage_container", "configuration": {
+        "public_access": str(p.get("publicAccess") or "None"),
+    }, "tags": {}, "identifier": f"Microsoft.Storage/storageAccounts/blobServices/containers.{key[1]}"}
+
+
 _MAPPERS = {
     "Microsoft.Network/networkSecurityGroups": _map_network_security_group,
     "Microsoft.Storage/storageAccounts": _map_storage_account,
@@ -262,6 +285,9 @@ _MAPPERS = {
     "Microsoft.ApiManagement/service": _map_api_management,
     "Microsoft.KeyVault/vaults/keys": _map_key_vault_key,
     "Microsoft.KeyVault/vaults/secrets": _map_key_vault_secret,
+    "Microsoft.Compute/disks": _map_managed_disk,
+    "Microsoft.Sql/servers/databases": _map_sql_database,
+    "Microsoft.Storage/storageAccounts/blobServices/containers": _map_storage_container,
 }
 
 

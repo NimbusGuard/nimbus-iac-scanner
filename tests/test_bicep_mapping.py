@@ -216,3 +216,22 @@ def test_key_vault_key_bicep():
 def test_key_vault_secret_bicep():
     assert _one({"type": "Microsoft.KeyVault/vaults/secrets", "properties": {"attributes": {"exp": 1893456000}}})["configuration"] == {"expiration_set": True}
     assert _one({"type": "Microsoft.KeyVault/vaults/secrets", "properties": {}})["configuration"] == {"expiration_set": False}
+
+
+# --- managed_disk / sql_database / storage_container (Bicep) ---------------
+
+def test_managed_disk_bicep():
+    e = _one({"type": "Microsoft.Compute/disks", "properties": {"publicNetworkAccess": "Disabled", "networkAccessPolicy": "DenyAll"}})
+    assert e["configuration"] == {"public_network_access": "Disabled", "network_access_policy": "DenyAll"}
+    e2 = _one({"type": "Microsoft.Compute/disks", "properties": {}})
+    assert e2["configuration"] == {"public_network_access": "Enabled", "network_access_policy": "AllowAll"}
+
+
+def test_sql_database_bicep():
+    e = _one({"type": "Microsoft.Sql/servers/databases", "properties": {"requestedBackupStorageRedundancy": "Local", "ledgerOn": True}})
+    assert e["configuration"] == {"backup_storage_redundancy": "Local", "ledger_enabled": True}
+
+
+def test_storage_container_bicep():
+    assert _one({"type": "Microsoft.Storage/storageAccounts/blobServices/containers", "properties": {"publicAccess": "Container"}})["configuration"] == {"public_access": "Container"}
+    assert _one({"type": "Microsoft.Storage/storageAccounts/blobServices/containers", "properties": {}})["configuration"] == {"public_access": "None"}

@@ -1758,3 +1758,38 @@ def test_azure_key_vault_secret_expiration():
 resource "azurerm_key_vault_secret" "s" { name = "s" value = "x" key_vault_id = "x" expiration_date = "2027-01-01T00:00:00Z" }
 '''))[0]["configuration"] == {"expiration_set": True}
     assert map_resources(parse_source('resource "azurerm_key_vault_secret" "s" { name = "s" value = "x" key_vault_id = "x" }'))[0]["configuration"] == {"expiration_set": False}
+
+
+# --- azurerm managed_disk / sql_database / storage_container --------------
+
+def test_azure_managed_disk_strings():
+    r = parse_source('''
+resource "azurerm_managed_disk" "d" {
+  name = "d" storage_account_type = "Premium_LRS" create_option = "Empty" disk_size_gb = 10
+  public_network_access_enabled = false
+  network_access_policy         = "DenyAll"
+}
+''')
+    assert map_resources(r)[0]["configuration"] == {"public_network_access": "Disabled", "network_access_policy": "DenyAll"}
+    assert "attached" not in map_resources(r)[0]["configuration"]  # runtime state, not derivable
+
+
+def test_azure_managed_disk_defaults():
+    r = parse_source('resource "azurerm_managed_disk" "d" { name = "d" storage_account_type = "Standard_LRS" create_option = "Empty" disk_size_gb = 10 }')
+    assert map_resources(r)[0]["configuration"] == {"public_network_access": "Enabled", "network_access_policy": "AllowAll"}
+
+
+def test_azure_sql_database_redundancy_mapping():
+    assert map_resources(parse_source('''
+resource "azurerm_mssql_database" "db" { name = "db" server_id = "x" storage_account_type = "LRS" }
+'''))[0]["configuration"] == {"backup_storage_redundancy": "Local", "ledger_enabled": False}
+    assert map_resources(parse_source('''
+resource "azurerm_mssql_database" "db" { name = "db" server_id = "x" ledger_enabled = true }
+'''))[0]["configuration"] == {"backup_storage_redundancy": "Geo", "ledger_enabled": True}  # GRS default
+
+
+def test_azure_storage_container_access_mapping():
+    assert map_resources(parse_source('''
+resource "azurerm_storage_container" "c" { name = "c" container_access_type = "blob" }
+'''))[0]["configuration"] == {"public_access": "Blob"}
+    assert map_resources(parse_source('resource "azurerm_storage_container" "c" { name = "c" }'))[0]["configuration"] == {"public_access": "None"}
