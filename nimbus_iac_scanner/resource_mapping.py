@@ -234,6 +234,58 @@ def _map_load_balancer(key: ResourceKey, body: dict[str, Any], _all_resources) -
 
 
 # ---------------------------------------------------------------------------
+# EKS cluster (NG-AWS-EKS-001..005). Confirmed against controls/aws/eks/*.py:
+# endpoint_public_access / endpoint_private_access (bool), enabled_log_types
+# (list of api/audit/authenticator/controllerManager/scheduler),
+# secrets_encryption_enabled (bool -> an encryption_config covering
+# "secrets"), version (string, omitted if absent). AWS provider documented
+# defaults: vpc_config.endpoint_public_access = true, endpoint_private_access
+# = false (real data, included); enabled_cluster_log_types absent -> [];
+# no encryption_config -> secrets not encrypted.
+# ---------------------------------------------------------------------------
+
+def _first_block(body: dict[str, Any], name: str) -> Optional[dict[str, Any]]:
+    """A nested Terraform block parses as either a single dict or a
+    one-element list (hcl2 varies) -- normalize to the first dict, or None."""
+    block = body.get(name)
+    if isinstance(block, list):
+        block = block[0] if block else None
+    return block if isinstance(block, dict) else None
+
+
+def _map_eks_cluster(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    configuration: dict[str, Any] = {
+        "enabled_log_types": body.get("enabled_cluster_log_types") or [],
+    }
+    vpc = _first_block(body, "vpc_config")
+    if vpc is not None:
+        configuration["endpoint_public_access"] = bool(vpc.get("endpoint_public_access", True))
+        configuration["endpoint_private_access"] = bool(vpc.get("endpoint_private_access", False))
+    else:
+        # No vpc_config block at all is invalid Terraform for aws_eks_cluster
+        # (it's required), but if absent we fall back to the provider's own
+        # documented defaults rather than omitting -- these are real defaults.
+        configuration["endpoint_public_access"] = True
+        configuration["endpoint_private_access"] = False
+    enc = _first_block(body, "encryption_config")
+    if enc is not None:
+        resources = enc.get("resources") or []
+        configuration["secrets_encryption_enabled"] = "secrets" in resources
+    else:
+        configuration["secrets_encryption_enabled"] = False
+    version = body.get("version")
+    if version is not None:
+        configuration["version"] = str(version)
+    return {
+        "provider": "aws",
+        "resource_type": "eks_cluster",
+        "configuration": configuration,
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_eks_cluster.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # KMS key rotation (NG-AWS-KMS-001) -- `key_manager` is always "CUSTOMER"
 # for a Terraform-declared key (a structural fact: AWS-managed keys are
 # never created as a Terraform resource, they're implicit per-service
@@ -415,6 +467,7 @@ _MAPPERS = {
     "aws_iam_role": _map_iam_role,
     "aws_lb": _map_load_balancer,
     "aws_alb": _map_load_balancer,  # legacy alias for aws_lb (same schema)
+    "aws_eks_cluster": _map_eks_cluster,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

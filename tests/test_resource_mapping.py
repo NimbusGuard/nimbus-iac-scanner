@@ -632,3 +632,70 @@ resource "aws_alb" "legacy" {
     entry = map_resources(resources)[0]
     assert entry["resource_type"] == "load_balancer"
     assert entry["identifier"] == "aws_alb.legacy"
+
+
+# --- eks_cluster (NG-AWS-EKS-001..005) ------------------------------------
+
+def test_eks_cluster_all_fields():
+    resources = parse_source('''
+resource "aws_eks_cluster" "main" {
+  name    = "prod"
+  version = "1.29"
+  role_arn = "arn:aws:iam::1:role/eks"
+
+  enabled_cluster_log_types = ["api", "audit", "authenticator"]
+
+  vpc_config {
+    endpoint_public_access  = false
+    endpoint_private_access = true
+    subnet_ids              = ["subnet-1"]
+  }
+
+  encryption_config {
+    resources = ["secrets"]
+    provider {
+      key_arn = "arn:aws:kms:us-east-1:1:key/abc"
+    }
+  }
+}
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert cfg["enabled_log_types"] == ["api", "audit", "authenticator"]
+    assert cfg["endpoint_public_access"] is False
+    assert cfg["endpoint_private_access"] is True
+    assert cfg["secrets_encryption_enabled"] is True
+    assert cfg["version"] == "1.29"
+    assert map_resources(resources)[0]["identifier"] == "aws_eks_cluster.main"
+
+
+def test_eks_cluster_endpoint_defaults_and_no_logging_no_encryption():
+    resources = parse_source('''
+resource "aws_eks_cluster" "bare" {
+  name     = "bare"
+  role_arn = "arn:aws:iam::1:role/eks"
+  vpc_config {
+    subnet_ids = ["subnet-1"]
+  }
+}
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert cfg["endpoint_public_access"] is True   # provider default
+    assert cfg["endpoint_private_access"] is False  # provider default
+    assert cfg["enabled_log_types"] == []
+    assert cfg["secrets_encryption_enabled"] is False
+    assert "version" not in cfg  # omitted when absent, never fabricated
+
+
+def test_eks_cluster_encryption_config_without_secrets_is_not_secrets_encryption():
+    resources = parse_source('''
+resource "aws_eks_cluster" "other" {
+  name     = "other"
+  role_arn = "arn:aws:iam::1:role/eks"
+  vpc_config { subnet_ids = ["subnet-1"] }
+  encryption_config {
+    resources = ["configmaps"]
+    provider { key_arn = "arn:aws:kms:us-east-1:1:key/x" }
+  }
+}
+''')
+    assert map_resources(resources)[0]["configuration"]["secrets_encryption_enabled"] is False

@@ -266,3 +266,50 @@ Resources:
     assert cfg["type"] == "network"
     assert cfg["deletion_protection_enabled"] is False
     assert cfg["access_logs_enabled"] is False
+
+
+# --- eks_cluster (NG-AWS-EKS-001..005) ------------------------------------
+
+def test_eks_cluster_all_fields():
+    entry = map_resources(parse_source('''
+Resources:
+  Cluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Version: "1.29"
+      ResourcesVpcConfig:
+        EndpointPublicAccess: false
+        EndpointPrivateAccess: true
+      Logging:
+        ClusterLogging:
+          EnabledTypes:
+            - Type: api
+            - Type: audit
+      EncryptionConfig:
+        - Resources: [secrets]
+          Provider:
+            KeyArn: arn:aws:kms:us-east-1:1:key/abc
+''', is_yaml=True, file_key="t.yaml"))[0]
+    cfg = entry["configuration"]
+    assert cfg["endpoint_public_access"] is False
+    assert cfg["endpoint_private_access"] is True
+    assert cfg["enabled_log_types"] == ["api", "audit"]
+    assert cfg["secrets_encryption_enabled"] is True
+    assert cfg["version"] == "1.29"
+    assert entry["identifier"] == "AWS::EKS::Cluster.Cluster"
+
+
+def test_eks_cluster_defaults_when_minimal():
+    entry = map_resources(parse_source('''
+Resources:
+  Bare:
+    Type: AWS::EKS::Cluster
+    Properties:
+      ResourcesVpcConfig: {}
+''', is_yaml=True, file_key="t.yaml"))[0]
+    cfg = entry["configuration"]
+    assert cfg["endpoint_public_access"] is True
+    assert cfg["endpoint_private_access"] is False
+    assert cfg["enabled_log_types"] == []
+    assert cfg["secrets_encryption_enabled"] is False
+    assert "version" not in cfg

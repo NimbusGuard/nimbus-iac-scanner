@@ -273,6 +273,52 @@ def _map_load_balancer(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]
     }
 
 
+# ---------------------------------------------------------------------------
+# EKS cluster (NG-AWS-EKS-001..005). ResourcesVpcConfig.EndpointPublicAccess
+# (default true) / EndpointPrivateAccess (default false); Logging.
+# ClusterLogging.EnabledTypes is a list of {Type}; EncryptionConfig is a list
+# of {Resources:[...], Provider:{KeyArn}} -> secrets_encryption_enabled when
+# any entry covers "secrets"; Version. Confirmed against AWS's CFN docs.
+# ---------------------------------------------------------------------------
+
+def _map_eks_cluster(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    configuration: dict[str, Any] = {}
+    vpc = properties.get("ResourcesVpcConfig")
+    if isinstance(vpc, dict):
+        configuration["endpoint_public_access"] = bool(vpc.get("EndpointPublicAccess", True))
+        configuration["endpoint_private_access"] = bool(vpc.get("EndpointPrivateAccess", False))
+    else:
+        configuration["endpoint_public_access"] = True
+        configuration["endpoint_private_access"] = False
+    enabled_types: list[str] = []
+    logging = properties.get("Logging")
+    if isinstance(logging, dict):
+        cluster_logging = logging.get("ClusterLogging")
+        if isinstance(cluster_logging, dict):
+            for entry in cluster_logging.get("EnabledTypes") or []:
+                if isinstance(entry, dict) and isinstance(entry.get("Type"), str):
+                    enabled_types.append(entry["Type"])
+    configuration["enabled_log_types"] = enabled_types
+    secrets_encrypted = False
+    enc = properties.get("EncryptionConfig")
+    if isinstance(enc, list):
+        for entry in enc:
+            if isinstance(entry, dict) and "secrets" in (entry.get("Resources") or []):
+                secrets_encrypted = True
+    configuration["secrets_encryption_enabled"] = secrets_encrypted
+    version = properties.get("Version")
+    if version is not None:
+        configuration["version"] = str(version)
+    return {
+        "provider": "aws",
+        "resource_type": "eks_cluster",
+        "configuration": configuration,
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::EKS::Cluster.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "AWS::S3::Bucket": _map_s3_bucket,
     "AWS::EC2::SecurityGroup": _map_security_group,
@@ -283,6 +329,7 @@ _MAPPERS = {
     "AWS::IAM::Role": _map_iam_role,
     "AWS::IAM::User": _map_iam_user,
     "AWS::ElasticLoadBalancingV2::LoadBalancer": _map_load_balancer,
+    "AWS::EKS::Cluster": _map_eks_cluster,
 }
 
 
