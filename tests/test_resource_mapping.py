@@ -1864,3 +1864,54 @@ resource "azurerm_mssql_firewall_rule" "azure" {
 ''')
     entry = [e for e in map_resources(r) if e["resource_type"] == "sql_server"][0]
     assert entry["configuration"]["firewall_allows_all_networks"] is True  # the 0.0.0.0-255 rule, not the azure-services sentinel
+
+
+# --- azurerm app_service / function_app -----------------------------------
+
+def test_azure_app_service_hardened():
+    r = parse_source('''
+resource "azurerm_linux_web_app" "app" {
+  name = "app" service_plan_id = "x"
+  https_only                  = true
+  client_certificate_enabled  = true
+  identity { type = "SystemAssigned" }
+  site_config { minimum_tls_version = "1.2" http2_enabled = true ftps_state = "Disabled" }
+}
+''')
+    entry = map_resources(r)[0]
+    assert entry["resource_type"] == "app_service"
+    assert entry["configuration"] == {
+        "https_only": True, "client_certs_required": True, "managed_identity_enabled": True,
+        "http2_enabled": True, "ftp_deployments_disabled": True, "minimum_tls_1_2": True,
+    }
+
+
+def test_azure_app_service_insecure_defaults():
+    r = parse_source('resource "azurerm_windows_web_app" "app" { name = "app" service_plan_id = "x" }')
+    c = map_resources(r)[0]["configuration"]
+    assert c["https_only"] is False
+    assert c["client_certs_required"] is False
+    assert c["managed_identity_enabled"] is False
+    assert c["http2_enabled"] is False
+    assert c["ftp_deployments_disabled"] is True  # ftps_state default Disabled
+    assert "minimum_tls_1_2" not in c
+    assert "secrets_detected" not in c  # content scan, not derivable
+
+
+def test_azure_function_app():
+    r = parse_source('''
+resource "azurerm_linux_function_app" "fn" {
+  name = "fn" service_plan_id = "x" storage_account_name = "s" storage_account_access_key = "k"
+  https_only                    = true
+  public_network_access_enabled = false
+  site_config { minimum_tls_version = "1.2" }
+}
+''')
+    entry = map_resources(r)[0]
+    assert entry["resource_type"] == "function_app"
+    assert entry["configuration"] == {"https_only": True, "public_network_access_enabled": False, "minimum_tls_1_2": True}
+
+
+def test_azure_function_app_defaults():
+    r = parse_source('resource "azurerm_function_app" "fn" { name = "fn" }')
+    assert map_resources(r)[0]["configuration"] == {"https_only": False, "public_network_access_enabled": True}

@@ -287,6 +287,42 @@ def _map_sql_server(key: tuple[str, str], resource: dict[str, Any]) -> dict[str,
             "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Sql/servers.{key[1]}"}
 
 
+def _is_function_app_kind(kind: str) -> bool:
+    """kind contains "functionapp" but NOT "workflowapp" (a Logic App
+    Standard is functionapp,workflowapp -- not a Function App). Mirrors
+    nimbus_app's own collector split."""
+    k = str(kind or "").lower()
+    return "functionapp" in k and "workflowapp" not in k
+
+
+def _map_web_site(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    """Microsoft.Web/sites -> app_service or function_app by kind. Inline
+    fields only (site_config / identity live on the same resource in ARM)."""
+    p = resource.get("properties") or {}
+    site = p.get("siteConfig") or {}
+    identity = resource.get("identity") or {}
+    if _is_function_app_kind(resource.get("kind")):
+        cfg: dict[str, Any] = {
+            "https_only": bool(p.get("httpsOnly", False)),
+            "public_network_access_enabled": str(p.get("publicNetworkAccess", "Enabled")).lower() != "disabled",
+        }
+        if "minTlsVersion" in site:
+            cfg["minimum_tls_1_2"] = str(site.get("minTlsVersion") or "") >= "1.2"
+        return {"provider": "azure", "resource_type": "function_app", "configuration": cfg,
+                "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Web/sites.{key[1]}"}
+    cfg = {
+        "https_only": bool(p.get("httpsOnly", False)),
+        "client_certs_required": bool(p.get("clientCertEnabled", False)),
+        "managed_identity_enabled": bool(identity.get("type") and str(identity.get("type")).lower() != "none"),
+        "http2_enabled": bool(site.get("http20Enabled", False)),
+        "ftp_deployments_disabled": str(site.get("ftpsState", "Disabled")) == "Disabled",
+    }
+    if "minTlsVersion" in site:
+        cfg["minimum_tls_1_2"] = str(site.get("minTlsVersion") or "") >= "1.2"
+    return {"provider": "azure", "resource_type": "app_service", "configuration": cfg,
+            "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Web/sites.{key[1]}"}
+
+
 _MAPPERS = {
     "Microsoft.Network/networkSecurityGroups": _map_network_security_group,
     "Microsoft.Storage/storageAccounts": _map_storage_account,
@@ -308,6 +344,7 @@ _MAPPERS = {
     "Microsoft.Sql/servers/databases": _map_sql_database,
     "Microsoft.Storage/storageAccounts/blobServices/containers": _map_storage_container,
     "Microsoft.Sql/servers": _map_sql_server,
+    "Microsoft.Web/sites": _map_web_site,
 }
 
 

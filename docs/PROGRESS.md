@@ -61,13 +61,13 @@
 - [ ] virtual_machine (13 controls)
 - [x] sql_server (10 controls) -- azurerm (5 inline + 5 cross-resource children); Bicep inline-only (children are ARM sub-resources)
 - [ ] aks_cluster (7 controls)
-- [ ] app_service (7 controls)
+- [x] app_service (6 of 7) -- azurerm(linux/windows/legacy)+Bicep; secrets_detected omitted (content scan)
 - [x] key_vault (5 of 6 controls) -- azurerm + Bicep; access_policies (custom) omitted; logging via diagnostic-setting (TF only)
 - [x] container_registry (5 controls) -- azurerm+Bicep
 - [x] postgresql_server (4 controls) -- azurerm(flexible)+Bicep; ssl via require_secure_transport config (default ON)
 - [x] mysql_server (4 controls) -- azurerm(flexible)+Bicep; ssl via require_secure_transport config (default ON)
 - [x] cosmosdb_account (4 controls) -- azurerm + Bicep
-- [ ] function_app (4 controls)
+- [x] function_app (3 of 4) -- azurerm+Bicep(kind-branch); secrets_detected omitted (content scan)
 - [ ] recovery_services_vault (4 controls)
 - [ ] application_gateway (3 controls)
 - [ ] front_door (3 controls)

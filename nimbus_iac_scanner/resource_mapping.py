@@ -1235,6 +1235,51 @@ def _map_azure_sql_server(key: ResourceKey, body: dict[str, Any], all_resources:
 
 
 # ---------------------------------------------------------------------------
+# App Service / Function App (NG-AZURE-APPSERVICE-001..006, FUNCTIONAPP-
+# 001/002/003). https_only default false; client_certificate_enabled /
+# http2_enabled default false; ftps_state default "Disabled" (-> ftp_
+# deployments_disabled true); minimum_tls_version default 1.2 (omitted when
+# absent); managed identity from an identity block; function_app public_
+# network_access_enabled default true. secrets_detected (APPSERVICE-007 /
+# FUNCTIONAPP-004) is a content scan of app settings, not a config flag ->
+# omitted. All azurerm web-app / function-app resource variants (linux/
+# windows/legacy) map here.
+# ---------------------------------------------------------------------------
+
+def _map_azure_app_service(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    site_config = _first_block(body, "site_config")
+    configuration: dict[str, Any] = {
+        "https_only": bool(body.get("https_only", False)),
+        "client_certs_required": bool(body.get("client_certificate_enabled", False)),
+        "managed_identity_enabled": _first_block(body, "identity") is not None,
+        "http2_enabled": bool(site_config.get("http2_enabled", False)) if site_config is not None else False,
+        "ftp_deployments_disabled": str((site_config or {}).get("ftps_state", "Disabled")) == "Disabled",
+    }
+    if site_config is not None and "minimum_tls_version" in site_config:
+        configuration["minimum_tls_1_2"] = str(site_config.get("minimum_tls_version") or "") >= "1.2"
+    return {
+        "provider": "azure", "resource_type": "app_service",
+        "configuration": configuration, "tags": body.get("tags") or {},
+        "identifier": f"azurerm_app_service.{key[1]}",
+    }
+
+
+def _map_azure_function_app(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    site_config = _first_block(body, "site_config")
+    configuration: dict[str, Any] = {
+        "https_only": bool(body.get("https_only", False)),
+        "public_network_access_enabled": bool(body.get("public_network_access_enabled", True)),
+    }
+    if site_config is not None and "minimum_tls_version" in site_config:
+        configuration["minimum_tls_1_2"] = str(site_config.get("minimum_tls_version") or "") >= "1.2"
+    return {
+        "provider": "azure", "resource_type": "function_app",
+        "configuration": configuration, "tags": body.get("tags") or {},
+        "identifier": f"azurerm_function_app.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -1856,6 +1901,12 @@ _MAPPERS = {
     "azurerm_mssql_database": _map_azure_sql_database,
     "azurerm_storage_container": _map_azure_storage_container,
     "azurerm_mssql_server": _map_azure_sql_server,
+    "azurerm_linux_web_app": _map_azure_app_service,
+    "azurerm_windows_web_app": _map_azure_app_service,
+    "azurerm_app_service": _map_azure_app_service,
+    "azurerm_linux_function_app": _map_azure_function_app,
+    "azurerm_windows_function_app": _map_azure_function_app,
+    "azurerm_function_app": _map_azure_function_app,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

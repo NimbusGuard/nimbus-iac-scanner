@@ -258,3 +258,29 @@ def test_sql_server_bicep_defaults():
     assert c["entra_admin_configured"] is False
     assert c["managed_identity_enabled"] is False
     assert "minimum_tls_1_2" not in c
+
+
+# --- Microsoft.Web/sites -> app_service / function_app (by kind) ----------
+
+def test_web_site_app_service_bicep():
+    e = _one({"type": "Microsoft.Web/sites", "kind": "app,linux", "identity": {"type": "SystemAssigned"},
+              "properties": {"httpsOnly": True, "clientCertEnabled": True,
+                             "siteConfig": {"minTlsVersion": "1.2", "http20Enabled": True, "ftpsState": "Disabled"}}})
+    assert e["resource_type"] == "app_service"
+    assert e["configuration"] == {
+        "https_only": True, "client_certs_required": True, "managed_identity_enabled": True,
+        "http2_enabled": True, "ftp_deployments_disabled": True, "minimum_tls_1_2": True,
+    }
+
+
+def test_web_site_function_app_bicep():
+    e = _one({"type": "Microsoft.Web/sites", "kind": "functionapp,linux",
+              "properties": {"httpsOnly": True, "publicNetworkAccess": "Disabled", "siteConfig": {"minTlsVersion": "1.2"}}})
+    assert e["resource_type"] == "function_app"
+    assert e["configuration"] == {"https_only": True, "public_network_access_enabled": False, "minimum_tls_1_2": True}
+
+
+def test_web_site_logic_app_workflow_is_app_service_not_function():
+    # functionapp,workflowapp is a Logic App Standard -> NOT a function app
+    e = _one({"type": "Microsoft.Web/sites", "kind": "functionapp,workflowapp", "properties": {}})
+    assert e["resource_type"] == "app_service"
