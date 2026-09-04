@@ -538,3 +538,41 @@ Resources:
       CertificateTransparencyLoggingPreference: DISABLED
 ''', is_yaml=True, file_key="t.yaml"))[0]
     assert disabled["configuration"] == {"transparency_logging_enabled": False}
+
+
+# --- cloudfront_distribution ----------------------------------------------
+
+def test_cloudfront_cfn_hardened():
+    entry = map_resources(parse_source('''
+Resources:
+  Cdn:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        DefaultCacheBehavior:
+          ViewerProtocolPolicy: redirect-to-https
+        ViewerCertificate:
+          MinimumProtocolVersion: TLSv1.2_2021
+        Logging:
+          Bucket: logs.s3.amazonaws.com
+''', is_yaml=True, file_key="t.yaml"))[0]
+    cfg = entry["configuration"]
+    assert cfg == {"viewer_https_enforced": True, "minimum_tls_1_2": True, "access_logging_enabled": True}
+    assert "origin_access_controlled" not in cfg
+
+
+def test_cloudfront_cfn_insecure():
+    entry = map_resources(parse_source('''
+Resources:
+  Cdn:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        DefaultCacheBehavior:
+          ViewerProtocolPolicy: allow-all
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {
+        "viewer_https_enforced": False, "minimum_tls_1_2": False, "access_logging_enabled": False,
+    }

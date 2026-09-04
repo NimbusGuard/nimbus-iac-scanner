@@ -544,6 +544,57 @@ def _map_redshift_cluster(key: ResourceKey, body: dict[str, Any], _all_resources
 
 
 # ---------------------------------------------------------------------------
+# CloudFront distribution (NG-AWS-CLOUDFRONT-001/002/003). Matches the
+# collector's own semantics exactly:
+#   viewer_https_enforced  = no cache behavior (default or ordered) allows
+#                            "allow-all" viewer_protocol_policy
+#   minimum_tls_1_2        = viewer_certificate.minimum_protocol_version
+#                            >= "TLSv1.2" (string compare, same as the
+#                            collector); a default cert / absent value -> False
+#   access_logging_enabled = a logging_config block is present
+# NG-AWS-CLOUDFRONT-004 (origin_access_controlled) is DELIBERATELY OMITTED
+# (-> NOT_EVALUATED): the collector detects an S3 origin by the presence of
+# an S3OriginConfig on the live API object, but Terraform's modern
+# Origin Access Control pattern routinely declares an S3 origin with neither
+# an s3_origin_config nor a custom_origin_config block, so "is this an S3
+# origin, and is it access-controlled" is not reliably derivable from the
+# HCL -- and this is an all()-across-origins boolean where one misclassified
+# origin flips the whole verdict, i.e. a real false-PASS risk. Honest
+# NOT_EVALUATED beats a guessed pass here.
+# ---------------------------------------------------------------------------
+
+def _cloudfront_cache_behaviors(body: dict[str, Any]) -> list[dict[str, Any]]:
+    behaviors: list[dict[str, Any]] = []
+    default = _first_block(body, "default_cache_behavior")
+    if default is not None:
+        behaviors.append(default)
+    ordered = body.get("ordered_cache_behavior")
+    if isinstance(ordered, list):
+        behaviors.extend(b for b in ordered if isinstance(b, dict))
+    elif isinstance(ordered, dict):
+        behaviors.append(ordered)
+    return behaviors
+
+
+def _map_cloudfront_distribution(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    behaviors = _cloudfront_cache_behaviors(body)
+    viewer_https = not any(str(b.get("viewer_protocol_policy") or "") == "allow-all" for b in behaviors)
+    vc = _first_block(body, "viewer_certificate")
+    min_tls = bool(vc is not None and str(vc.get("minimum_protocol_version") or "") >= "TLSv1.2")
+    return {
+        "provider": "aws",
+        "resource_type": "cloudfront_distribution",
+        "configuration": {
+            "viewer_https_enforced": viewer_https,
+            "minimum_tls_1_2": min_tls,
+            "access_logging_enabled": _first_block(body, "logging_config") is not None,
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_cloudfront_distribution.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # IAM account password policy (NG-AWS-IAM-008/009/010). Direct attributes on
 # aws_iam_account_password_policy. TF defaults confirmed: minimum_password_
 # length 6, require_* false, max_password_age 0 (no expiry). TF spells two of
@@ -846,6 +897,7 @@ _MAPPERS = {
     "aws_sqs_queue": _map_sqs_queue,
     "aws_secretsmanager_secret": _map_secretsmanager_secret,
     "aws_acm_certificate": _map_acm_certificate,
+    "aws_cloudfront_distribution": _map_cloudfront_distribution,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

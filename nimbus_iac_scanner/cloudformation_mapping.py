@@ -580,6 +580,38 @@ def _map_acm_certificate(key: ResourceKey, body: dict[str, Any]) -> dict[str, An
     }
 
 
+# ---------------------------------------------------------------------------
+# CloudFront distribution (NG-AWS-CLOUDFRONT-001/002/003). Same semantics as
+# the Terraform mapper; origin_access_controlled (004) omitted for the same
+# reason (an all()-across-origins boolean where the modern-OAC shape isn't
+# reliably distinguishable -> honest NOT_EVALUATED over a false-PASS risk).
+# access_logging_enabled = a Logging block with a Bucket is present.
+# ---------------------------------------------------------------------------
+
+def _map_cloudfront_distribution(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    dc = properties.get("DistributionConfig") or {}
+    behaviors: list[dict[str, Any]] = [dc.get("DefaultCacheBehavior") or {}]
+    cbs = dc.get("CacheBehaviors")
+    if isinstance(cbs, list):
+        behaviors.extend(b for b in cbs if isinstance(b, dict))
+    viewer_https = not any(str((b or {}).get("ViewerProtocolPolicy") or "") == "allow-all" for b in behaviors)
+    vc = dc.get("ViewerCertificate") or {}
+    min_tls = str(vc.get("MinimumProtocolVersion") or "") >= "TLSv1.2"
+    logging = dc.get("Logging") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "cloudfront_distribution",
+        "configuration": {
+            "viewer_https_enforced": viewer_https,
+            "minimum_tls_1_2": min_tls,
+            "access_logging_enabled": bool(logging.get("Bucket")),
+        },
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::CloudFront::Distribution.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "AWS::S3::Bucket": _map_s3_bucket,
     "AWS::EC2::SecurityGroup": _map_security_group,
@@ -603,6 +635,7 @@ _MAPPERS = {
     "AWS::SQS::Queue": _map_sqs_queue,
     "AWS::SecretsManager::Secret": _map_secretsmanager_secret,
     "AWS::CertificateManager::Certificate": _map_acm_certificate,
+    "AWS::CloudFront::Distribution": _map_cloudfront_distribution,
 }
 
 

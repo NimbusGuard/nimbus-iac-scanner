@@ -19,7 +19,7 @@
 - [x] ec2_instance (6 controls) -- partial: ssm_managed/secrets_detected omitted (not knowable from IaC)
 - [x] lambda_function (6 controls) -- TF also correlates function_url; resource_policy_allows_public/secrets_detected omitted
 - [x] ecr_repository (4 controls) -- policy_allows_public omitted
-- [ ] cloudfront_distribution (4 controls)
+- [x] cloudfront_distribution (3 of 4 controls) -- origin_access_controlled omitted (OAC shape not reliably derivable from IaC)
 - [x] iam_password_policy (3 controls) -- Terraform only (no CFN resource)
 - [x] dynamodb_table (3 controls)
 - [x] efs_file_system (3 controls) -- policy_allows_anonymous_access omitted

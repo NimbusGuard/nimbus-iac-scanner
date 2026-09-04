@@ -1047,3 +1047,44 @@ resource "aws_acm_certificate" "c" {
 }
 ''')
     assert map_resources(resources)[0]["configuration"] == {"transparency_logging_enabled": False}
+
+
+# --- cloudfront_distribution (NG-AWS-CLOUDFRONT-001/002/003; 004 omitted) --
+
+def test_cloudfront_hardened():
+    resources = parse_source('''
+resource "aws_cloudfront_distribution" "cdn" {
+  default_cache_behavior { viewer_protocol_policy = "redirect-to-https" }
+  ordered_cache_behavior { viewer_protocol_policy = "https-only" }
+  viewer_certificate { minimum_protocol_version = "TLSv1.2_2021" }
+  logging_config { bucket = "logs.s3.amazonaws.com" }
+}
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert cfg == {"viewer_https_enforced": True, "minimum_tls_1_2": True, "access_logging_enabled": True}
+    assert "origin_access_controlled" not in cfg  # deliberately NOT_EVALUATED
+
+
+def test_cloudfront_insecure_allow_all_and_default_cert_and_no_logging():
+    resources = parse_source('''
+resource "aws_cloudfront_distribution" "cdn" {
+  default_cache_behavior { viewer_protocol_policy = "allow-all" }
+  viewer_certificate { cloudfront_default_certificate = true }
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "viewer_https_enforced": False, "minimum_tls_1_2": False, "access_logging_enabled": False,
+    }
+
+
+def test_cloudfront_ordered_behavior_allow_all_flips_https_enforced():
+    resources = parse_source('''
+resource "aws_cloudfront_distribution" "cdn" {
+  default_cache_behavior { viewer_protocol_policy = "https-only" }
+  ordered_cache_behavior { viewer_protocol_policy = "allow-all" }
+  viewer_certificate { minimum_protocol_version = "TLSv1.1_2016" }
+}
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert cfg["viewer_https_enforced"] is False  # an ordered behavior is insecure
+    assert cfg["minimum_tls_1_2"] is False  # TLSv1.1 < TLSv1.2
