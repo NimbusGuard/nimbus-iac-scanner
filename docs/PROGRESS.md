@@ -25,7 +25,7 @@
 - [x] efs_file_system (3 controls) -- policy_allows_anonymous_access omitted
 - [x] elasticache_cluster (3 controls)
 - [x] redshift_cluster (3 controls) -- publicly_accessible only when explicit
-- [ ] api_gateway_stage (3 controls)
+- [x] api_gateway_stage (3 controls) -- CFN omits waf_attached (separate association resource)
 - [x] sagemaker_notebook_instance (3 controls)
 - [x] ebs_snapshot -- SKIPPED: encrypted is inherited/runtime, publicly_shared not IaC-expressible
 - [x] rds_snapshot -- SKIPPED: encrypted inherited/runtime, public sharing not a TF attribute

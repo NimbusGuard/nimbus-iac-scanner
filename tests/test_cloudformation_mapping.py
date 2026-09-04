@@ -807,3 +807,33 @@ Resources:
     Properties:
       Name: example.com
 ''') == {"query_logging_enabled": False}
+
+
+def test_api_gateway_stage_cfn_inline_method_settings():
+    entry = map_resources(parse_source('''
+Resources:
+  Prod:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: abc123
+      StageName: prod
+      TracingEnabled: true
+      MethodSettings:
+        - HttpMethod: "*"
+          ResourcePath: "/*"
+          LoggingLevel: INFO
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {"execution_logging_enabled": True, "xray_tracing_enabled": True}
+    assert "waf_attached" not in entry["configuration"]
+
+
+def test_api_gateway_stage_cfn_defaults():
+    entry = map_resources(parse_source('''
+Resources:
+  Prod:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: abc123
+      StageName: prod
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {"execution_logging_enabled": False, "xray_tracing_enabled": False}

@@ -806,6 +806,60 @@ def _map_athena_workgroup(key: ResourceKey, body: dict[str, Any], _all_resources
 
 
 # ---------------------------------------------------------------------------
+# API Gateway stage (NG-AWS-APIGATEWAY-001/002/003).
+#   xray_tracing_enabled   = the stage's own xray_tracing_enabled (direct)
+#   execution_logging_enabled = an aws_api_gateway_method_settings for this
+#       stage sets a logging_level of INFO or ERROR (the collector counts
+#       any method-level override, including the "*/*" stage default)
+#   waf_attached           = an aws_wafv2_web_acl_association targets this
+#       stage
+# The latter two are separate Terraform resources correlated back to the
+# stage. In CloudFormation, MethodSettings is inline on the stage (so
+# execution logging is derivable there), but the WAF association is a
+# separate resource -> the CFN mapper omits waf_attached.
+# ---------------------------------------------------------------------------
+
+def _apigw_execution_logging_enabled(stage_tf_name: str, stage_name_literal: Any, all_resources: dict[ResourceKey, dict[str, Any]]) -> bool:
+    for (resource_type, _name), ms in all_resources.items():
+        if resource_type != "aws_api_gateway_method_settings":
+            continue
+        sn = ms.get("stage_name")
+        ref = resolve_reference(sn)
+        matches_ref = ref is not None and ref[0] == "aws_api_gateway_stage" and ref[1] == stage_tf_name
+        matches_literal = isinstance(sn, str) and isinstance(stage_name_literal, str) and sn == stage_name_literal
+        if not (matches_ref or matches_literal):
+            continue
+        settings = _first_block(ms, "settings")
+        if settings is not None and str(settings.get("logging_level") or "").upper() in ("INFO", "ERROR"):
+            return True
+    return False
+
+
+def _apigw_waf_attached(stage_tf_name: str, all_resources: dict[ResourceKey, dict[str, Any]]) -> bool:
+    for (resource_type, _name), assoc in all_resources.items():
+        if resource_type != "aws_wafv2_web_acl_association":
+            continue
+        ref = resolve_reference(assoc.get("resource_arn"))
+        if ref is not None and ref[0] == "aws_api_gateway_stage" and ref[1] == stage_tf_name:
+            return True
+    return False
+
+
+def _map_api_gateway_stage(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "api_gateway_stage",
+        "configuration": {
+            "execution_logging_enabled": _apigw_execution_logging_enabled(key[1], body.get("stage_name"), all_resources),
+            "xray_tracing_enabled": bool(body.get("xray_tracing_enabled", False)),
+            "waf_attached": _apigw_waf_attached(key[1], all_resources),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_api_gateway_stage.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Glue Data Catalog encryption settings (NG-AWS-GLUE-001/002).
 # ---------------------------------------------------------------------------
 
@@ -1263,6 +1317,7 @@ _MAPPERS = {
     "aws_ami": _map_ami,
     "aws_vpc": _map_vpc,
     "aws_route53_zone": _map_route53_hosted_zone,
+    "aws_api_gateway_stage": _map_api_gateway_stage,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -1284,6 +1339,8 @@ _CONSUMED_ONLY = {
     "aws_ami_launch_permission",  # merged into its AMI's public flag
     "aws_flow_log",  # merged into its VPC's flow_logs_enabled
     "aws_route53_query_log",  # merged into its zone's query_logging_enabled
+    "aws_api_gateway_method_settings",  # merged into a stage's execution_logging_enabled
+    "aws_wafv2_web_acl_association",  # merged into a stage's waf_attached
 }
 
 

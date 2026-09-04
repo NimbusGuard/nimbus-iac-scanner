@@ -680,6 +680,33 @@ def _map_athena_workgroup(key: ResourceKey, body: dict[str, Any]) -> dict[str, A
 
 
 # ---------------------------------------------------------------------------
+# API Gateway stage (NG-AWS-APIGATEWAY-001/002). MethodSettings is inline on
+# the CFN stage, so execution_logging_enabled is derivable; waf_attached
+# (AWS::WAFv2::WebACLAssociation) is a separate resource -> omitted here.
+# ---------------------------------------------------------------------------
+
+def _map_api_gateway_stage(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    method_settings = properties.get("MethodSettings")
+    if not isinstance(method_settings, list):
+        method_settings = []
+    execution_logging = any(
+        isinstance(ms, dict) and str(ms.get("LoggingLevel") or "").upper() in ("INFO", "ERROR")
+        for ms in method_settings
+    )
+    return {
+        "provider": "aws",
+        "resource_type": "api_gateway_stage",
+        "configuration": {
+            "execution_logging_enabled": execution_logging,
+            "xray_tracing_enabled": bool(properties.get("TracingEnabled", False)),
+        },
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::ApiGateway::Stage.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Glue / Kinesis / Firehose / Step Functions / Backup / DMS / MQ /
 # CodeBuild / ECS / Subnet / Route53 hosted zone (1 control each; AMI and
 # the VPC flow-log control have no derivable CloudFormation shape).
@@ -863,6 +890,7 @@ _MAPPERS = {
     "AWS::ECS::Cluster": _map_ecs_cluster,
     "AWS::EC2::Subnet": _map_subnet,
     "AWS::Route53::HostedZone": _map_route53_hosted_zone,
+    "AWS::ApiGateway::Stage": _map_api_gateway_stage,
 }
 
 

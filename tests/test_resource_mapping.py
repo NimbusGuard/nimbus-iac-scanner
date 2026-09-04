@@ -1348,3 +1348,61 @@ resource "aws_route53_query_log" "ql" {
     entry = [e for e in map_resources(resources) if e["resource_type"] == "route53_hosted_zone"][0]
     assert entry["configuration"] == {"query_logging_enabled": True}
     assert map_resources(parse_source('resource "aws_route53_zone" "z" { name = "example.com" }'))[0]["configuration"] == {"query_logging_enabled": False}
+
+
+# --- api_gateway_stage (NG-AWS-APIGATEWAY-001/002/003) --------------------
+
+def test_api_gateway_stage_all_three_via_cross_resources():
+    resources = parse_source('''
+resource "aws_api_gateway_stage" "prod" {
+  rest_api_id          = "abc123"
+  stage_name           = "prod"
+  deployment_id        = "d1"
+  xray_tracing_enabled = true
+}
+resource "aws_api_gateway_method_settings" "all" {
+  rest_api_id = "abc123"
+  stage_name  = aws_api_gateway_stage.prod.stage_name
+  method_path = "*/*"
+  settings { logging_level = "INFO" }
+}
+resource "aws_wafv2_web_acl_association" "assoc" {
+  resource_arn = aws_api_gateway_stage.prod.arn
+  web_acl_arn  = "arn:aws:wafv2:...:webacl/x"
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "api_gateway_stage"][0]
+    assert entry["configuration"] == {
+        "execution_logging_enabled": True, "xray_tracing_enabled": True, "waf_attached": True,
+    }
+
+
+def test_api_gateway_stage_defaults_all_false():
+    resources = parse_source('''
+resource "aws_api_gateway_stage" "prod" {
+  rest_api_id   = "abc123"
+  stage_name    = "prod"
+  deployment_id = "d1"
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "execution_logging_enabled": False, "xray_tracing_enabled": False, "waf_attached": False,
+    }
+
+
+def test_api_gateway_stage_logging_off_is_not_enabled():
+    resources = parse_source('''
+resource "aws_api_gateway_stage" "prod" {
+  rest_api_id   = "abc123"
+  stage_name    = "prod"
+  deployment_id = "d1"
+}
+resource "aws_api_gateway_method_settings" "all" {
+  rest_api_id = "abc123"
+  stage_name  = aws_api_gateway_stage.prod.stage_name
+  method_path = "*/*"
+  settings { logging_level = "OFF" }
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "api_gateway_stage"][0]
+    assert entry["configuration"]["execution_logging_enabled"] is False
