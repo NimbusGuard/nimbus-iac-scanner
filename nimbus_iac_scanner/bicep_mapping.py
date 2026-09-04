@@ -268,6 +268,25 @@ def _map_storage_container(key: tuple[str, str], resource: dict[str, Any]) -> di
     }, "tags": {}, "identifier": f"Microsoft.Storage/storageAccounts/blobServices/containers.{key[1]}"}
 
 
+def _map_sql_server(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    """Microsoft.Sql/servers (NG-AZURE-SQL-001/003/006/007/011) -- inline
+    fields only; auditing/tde/threat/firewall are ARM child resources with
+    no cross-resource view here (the Terraform mapper correlates those)."""
+    p = resource.get("properties") or {}
+    admins = p.get("administrators") or {}
+    identity = resource.get("identity") or {}
+    cfg: dict[str, Any] = {
+        "public_network_access_enabled": str(p.get("publicNetworkAccess", "Enabled")).lower() != "disabled",
+        "entra_admin_configured": bool(admins),
+        "azuread_only_authentication_enabled": bool(admins.get("azureADOnlyAuthentication", False)),
+        "managed_identity_enabled": bool(identity.get("type") and str(identity.get("type")).lower() != "none"),
+    }
+    if "minimalTlsVersion" in p:
+        cfg["minimum_tls_1_2"] = str(p.get("minimalTlsVersion") or "") in ("1.2", "1.3")
+    return {"provider": "azure", "resource_type": "sql_server", "configuration": cfg,
+            "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Sql/servers.{key[1]}"}
+
+
 _MAPPERS = {
     "Microsoft.Network/networkSecurityGroups": _map_network_security_group,
     "Microsoft.Storage/storageAccounts": _map_storage_account,
@@ -288,6 +307,7 @@ _MAPPERS = {
     "Microsoft.Compute/disks": _map_managed_disk,
     "Microsoft.Sql/servers/databases": _map_sql_database,
     "Microsoft.Storage/storageAccounts/blobServices/containers": _map_storage_container,
+    "Microsoft.Sql/servers": _map_sql_server,
 }
 
 

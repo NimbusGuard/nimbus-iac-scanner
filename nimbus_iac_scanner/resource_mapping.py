@@ -1173,6 +1173,68 @@ def _map_azure_storage_container(key: ResourceKey, body: dict[str, Any], _all_re
 
 
 # ---------------------------------------------------------------------------
+# SQL Server (NG-AZURE-SQL-001..008/011/012). Inline on the server:
+# public_network_access_enabled (default true), entra_admin_configured
+# (an azuread_administrator block), managed_identity_enabled (an identity
+# block), azuread_only_authentication_enabled (azuread_administrator with
+# azuread_authentication_only), minimum_tls_1_2 (minimum_tls_version in
+# 1.2/1.3; omitted when absent -- version-ambiguous). Correlated from the
+# server's own child resources: auditing_enabled + audit_log_destination_
+# configured (extended_auditing_policy), tde_with_cmk (transparent_data_
+# encryption with a key_vault_key_id -> server_key_type AzureKeyVault),
+# threat_detection_enabled (security_alert_policy state Enabled),
+# firewall_allows_all_networks (a firewall_rule 0.0.0.0-255.255.255.255 --
+# the literal entire-internet rule ONLY, NOT the 0.0.0.0-0.0.0.0 "allow
+# Azure services" sentinel, matching the collector exactly). The child
+# resources are Bicep/ARM child resources with no cross-resource view, so
+# the Bicep mapper covers only the inline fields.
+# ---------------------------------------------------------------------------
+
+def _mssql_children(child_type: str, server_tf_name: str, all_resources: dict[ResourceKey, dict[str, Any]]) -> list[dict[str, Any]]:
+    out = []
+    for (resource_type, _name), child in all_resources.items():
+        if resource_type != child_type:
+            continue
+        ref = resolve_reference(child.get("server_id"))
+        if ref is not None and ref[0] == "azurerm_mssql_server" and ref[1] == server_tf_name:
+            out.append(child)
+    return out
+
+
+def _map_azure_sql_server(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    name = key[1]
+    aad = _first_block(body, "azuread_administrator")
+    configuration: dict[str, Any] = {
+        "public_network_access_enabled": bool(body.get("public_network_access_enabled", True)),
+        "entra_admin_configured": aad is not None,
+        "managed_identity_enabled": _first_block(body, "identity") is not None,
+        "azuread_only_authentication_enabled": bool(aad is not None and aad.get("azuread_authentication_only", False)),
+    }
+    if "minimum_tls_version" in body:
+        configuration["minimum_tls_1_2"] = str(body.get("minimum_tls_version") or "") in ("1.2", "1.3")
+    audit = _mssql_children("azurerm_mssql_server_extended_auditing_policy", name, all_resources)
+    configuration["auditing_enabled"] = len(audit) > 0
+    configuration["audit_log_destination_configured"] = any(
+        bool(p.get("storage_endpoint")) or bool(p.get("log_monitoring_enabled", False)) for p in audit
+    )
+    tde = _mssql_children("azurerm_mssql_server_transparent_data_encryption", name, all_resources)
+    configuration["tde_with_cmk"] = any(bool(t.get("key_vault_key_id")) for t in tde)
+    alert = _mssql_children("azurerm_mssql_server_security_alert_policy", name, all_resources)
+    configuration["threat_detection_enabled"] = any(str(a.get("state") or "").lower() == "enabled" for a in alert)
+    fw = _mssql_children("azurerm_mssql_firewall_rule", name, all_resources)
+    configuration["firewall_allows_all_networks"] = any(
+        f.get("start_ip_address") == "0.0.0.0" and f.get("end_ip_address") == "255.255.255.255" for f in fw
+    )
+    return {
+        "provider": "azure",
+        "resource_type": "sql_server",
+        "configuration": configuration,
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_mssql_server.{name}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -1793,6 +1855,7 @@ _MAPPERS = {
     "azurerm_managed_disk": _map_azure_managed_disk,
     "azurerm_mssql_database": _map_azure_sql_database,
     "azurerm_storage_container": _map_azure_storage_container,
+    "azurerm_mssql_server": _map_azure_sql_server,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -1820,6 +1883,10 @@ _CONSUMED_ONLY = {
     "azurerm_postgresql_flexible_server_configuration",  # merged into ssl_enforced
     "azurerm_mysql_flexible_server_configuration",  # merged into ssl_enforced
     "azurerm_monitor_diagnostic_setting",  # merged into a target resource's logging_enabled
+    "azurerm_mssql_server_extended_auditing_policy",  # merged into a server's auditing
+    "azurerm_mssql_server_transparent_data_encryption",  # merged into a server's tde_with_cmk
+    "azurerm_mssql_server_security_alert_policy",  # merged into a server's threat_detection
+    "azurerm_mssql_firewall_rule",  # merged into a server's firewall_allows_all_networks
 }
 
 

@@ -235,3 +235,26 @@ def test_sql_database_bicep():
 def test_storage_container_bicep():
     assert _one({"type": "Microsoft.Storage/storageAccounts/blobServices/containers", "properties": {"publicAccess": "Container"}})["configuration"] == {"public_access": "Container"}
     assert _one({"type": "Microsoft.Storage/storageAccounts/blobServices/containers", "properties": {}})["configuration"] == {"public_access": "None"}
+
+
+# --- sql_server (Bicep, inline only) --------------------------------------
+
+def test_sql_server_bicep_inline():
+    e = _one({"type": "Microsoft.Sql/servers", "identity": {"type": "SystemAssigned"}, "properties": {
+        "publicNetworkAccess": "Disabled", "minimalTlsVersion": "1.2",
+        "administrators": {"administratorType": "ActiveDirectory", "azureADOnlyAuthentication": True},
+    }})
+    c = e["configuration"]
+    assert c == {
+        "public_network_access_enabled": False, "entra_admin_configured": True,
+        "azuread_only_authentication_enabled": True, "managed_identity_enabled": True, "minimum_tls_1_2": True,
+    }
+
+
+def test_sql_server_bicep_defaults():
+    e = _one({"type": "Microsoft.Sql/servers", "properties": {}})
+    c = e["configuration"]
+    assert c["public_network_access_enabled"] is True
+    assert c["entra_admin_configured"] is False
+    assert c["managed_identity_enabled"] is False
+    assert "minimum_tls_1_2" not in c

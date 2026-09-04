@@ -59,7 +59,7 @@
 - [ ] network_security_group (16 controls)
 - [ ] storage_account (14 controls)
 - [ ] virtual_machine (13 controls)
-- [ ] sql_server (10 controls)
+- [x] sql_server (10 controls) -- azurerm (5 inline + 5 cross-resource children); Bicep inline-only (children are ARM sub-resources)
 - [ ] aks_cluster (7 controls)
 - [ ] app_service (7 controls)
 - [x] key_vault (5 of 6 controls) -- azurerm + Bicep; access_policies (custom) omitted; logging via diagnostic-setting (TF only)

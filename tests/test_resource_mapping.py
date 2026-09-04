@@ -1793,3 +1793,74 @@ def test_azure_storage_container_access_mapping():
 resource "azurerm_storage_container" "c" { name = "c" container_access_type = "blob" }
 '''))[0]["configuration"] == {"public_access": "Blob"}
     assert map_resources(parse_source('resource "azurerm_storage_container" "c" { name = "c" }'))[0]["configuration"] == {"public_access": "None"}
+
+
+# --- azurerm sql_server (NG-AZURE-SQL-001..008/011/012) -------------------
+
+def test_azure_sql_server_hardened_all_fields():
+    r = parse_source('''
+resource "azurerm_mssql_server" "s" {
+  name = "s" version = "12.0"
+  public_network_access_enabled = false
+  minimum_tls_version           = "1.2"
+  identity { type = "SystemAssigned" }
+  azuread_administrator { login_username = "a" object_id = "x" azuread_authentication_only = true }
+}
+resource "azurerm_mssql_server_extended_auditing_policy" "a" {
+  server_id       = azurerm_mssql_server.s.id
+  storage_endpoint = "https://acct.blob.core.windows.net/"
+}
+resource "azurerm_mssql_server_transparent_data_encryption" "t" {
+  server_id        = azurerm_mssql_server.s.id
+  key_vault_key_id = "https://kv.vault.azure.net/keys/k"
+}
+resource "azurerm_mssql_server_security_alert_policy" "p" {
+  resource_group_name = "rg" server_name = azurerm_mssql_server.s.name
+  server_id = azurerm_mssql_server.s.id
+  state = "Enabled"
+}
+''')
+    entry = [e for e in map_resources(r) if e["resource_type"] == "sql_server"][0]
+    c = entry["configuration"]
+    assert c["public_network_access_enabled"] is False
+    assert c["entra_admin_configured"] is True
+    assert c["managed_identity_enabled"] is True
+    assert c["azuread_only_authentication_enabled"] is True
+    assert c["minimum_tls_1_2"] is True
+    assert c["auditing_enabled"] is True
+    assert c["audit_log_destination_configured"] is True
+    assert c["tde_with_cmk"] is True
+    assert c["threat_detection_enabled"] is True
+    assert c["firewall_allows_all_networks"] is False
+
+
+def test_azure_sql_server_insecure_defaults():
+    r = parse_source('resource "azurerm_mssql_server" "s" { name = "s" version = "12.0" }')
+    c = map_resources(r)[0]["configuration"]
+    assert c["public_network_access_enabled"] is True
+    assert c["entra_admin_configured"] is False
+    assert c["managed_identity_enabled"] is False
+    assert c["azuread_only_authentication_enabled"] is False
+    assert c["auditing_enabled"] is False
+    assert c["tde_with_cmk"] is False
+    assert c["threat_detection_enabled"] is False
+    assert c["firewall_allows_all_networks"] is False
+    assert "minimum_tls_1_2" not in c  # omitted when absent
+
+
+def test_azure_sql_server_firewall_entire_internet_rule():
+    r = parse_source('''
+resource "azurerm_mssql_server" "s" { name = "s" version = "12.0" }
+resource "azurerm_mssql_firewall_rule" "all" {
+  server_id        = azurerm_mssql_server.s.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "255.255.255.255"
+}
+resource "azurerm_mssql_firewall_rule" "azure" {
+  server_id        = azurerm_mssql_server.s.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+''')
+    entry = [e for e in map_resources(r) if e["resource_type"] == "sql_server"][0]
+    assert entry["configuration"]["firewall_allows_all_networks"] is True  # the 0.0.0.0-255 rule, not the azure-services sentinel
