@@ -86,3 +86,32 @@ def test_a_failure_in_any_batch_makes_the_whole_result_fail():
     with patch("nimbus_iac_scanner.api_client.requests.post", side_effect=responses):
         result = run_gate_check("https://api.example.com", "key", resources)
     assert result.passed is False
+
+
+def test_scan_ids_are_collected_from_the_response():
+    body = {"passed": False, "results": [{"status": "FAIL"}], "scan_id": "11111111-1111-1111-1111-111111111111"}
+    with patch("nimbus_iac_scanner.api_client.requests.post", return_value=_fake_response(200, body)):
+        result = run_gate_check("https://api.example.com", "key", [{"provider": "aws", "resource_type": "s3_bucket"}])
+    assert result.scan_ids == ["11111111-1111-1111-1111-111111111111"]
+
+
+def test_source_is_sent_on_every_batch():
+    resources = [{"provider": "aws", "resource_type": "s3_bucket", "identifier": str(i)} for i in range(GATE_CHECK_BATCH_SIZE + 1)]
+    source = {"repository": "acme/infra", "branch": "main", "ci_provider": "github"}
+    responses = [
+        _fake_response(200, {"passed": True, "results": [], "scan_id": "a"}),
+        _fake_response(200, {"passed": True, "results": [], "scan_id": "b"}),
+    ]
+    with patch("nimbus_iac_scanner.api_client.requests.post", side_effect=responses) as mock_post:
+        result = run_gate_check("https://api.example.com", "key", resources, source=source)
+    assert mock_post.call_count == 2
+    for call in mock_post.call_args_list:
+        assert call.kwargs["json"]["source"] == source
+    assert result.scan_ids == ["a", "b"]
+
+
+def test_no_source_key_when_source_is_none():
+    body = {"passed": True, "results": []}
+    with patch("nimbus_iac_scanner.api_client.requests.post", return_value=_fake_response(200, body)) as mock_post:
+        run_gate_check("https://api.example.com", "key", [{"provider": "aws", "resource_type": "s3_bucket"}])
+    assert "source" not in mock_post.call_args.kwargs["json"]

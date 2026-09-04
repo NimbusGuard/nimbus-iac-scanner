@@ -21,6 +21,7 @@ import sys
 
 from nimbus_iac_scanner import cloudformation_mapping, cloudformation_parser, resource_mapping, terraform_parser
 from nimbus_iac_scanner.api_client import GateCheckError, run_gate_check
+from nimbus_iac_scanner.ci_source import collect_ci_source
 from nimbus_iac_scanner.bicep_parser import BicepCliNotFoundError, BicepCompileError
 from nimbus_iac_scanner import bicep_mapping, bicep_parser
 from nimbus_iac_scanner.mr_comment import MrCommentError, find_merge_request_iid
@@ -105,13 +106,17 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        result = run_gate_check(args.api_url, args.api_key, mapped)
+        result = run_gate_check(args.api_url, args.api_key, mapped, source=collect_ci_source())
     except GateCheckError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
     report = format_report(result.results, unmapped)
     print(report)
+    if result.scan_ids:
+        # A link back to the persisted run(s) in the NimbusGuard UI --
+        # one line, informational, never affects the exit code.
+        print(f"\nRecorded in NimbusGuard: scan {', '.join(result.scan_ids)}", file=sys.stderr)
 
     if args.post_pr_comment:
         _try_post_pr_comment(report)

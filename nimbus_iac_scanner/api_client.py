@@ -5,8 +5,8 @@ already uses. Batches at 100 resources per call (the route's own
 documented max_length) -- a scan with more than 100 resources makes
 multiple calls, results concatenated; `passed` is the AND across every
 batch."""
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Optional
 
 import requests
 
@@ -26,25 +26,42 @@ class GateCheckError(Exception):
 class GateCheckResult:
     passed: bool
     results: list[dict[str, Any]]
+    # The nimbus_app IacScan id(s) each batch was recorded as -- one per
+    # HTTP call. A scan with <=100 resources (the overwhelming common
+    # case) makes one call and gets one id; a larger scan is split into
+    # several IacScans that share the same `source` metadata (repo/
+    # branch/commit/PR), so the UI can still group them by commit.
+    scan_ids: list[str] = field(default_factory=list)
 
 
-def run_gate_check(api_url: str, api_key: str, resources: list[dict[str, Any]]) -> GateCheckResult:
+def run_gate_check(
+    api_url: str,
+    api_key: str,
+    resources: list[dict[str, Any]],
+    source: Optional[dict[str, Any]] = None,
+) -> GateCheckResult:
     """`api_url` is the base nimbus_app API URL (e.g.
     `https://api.nimbusguard.io/v1` or a local dev URL) -- this function
     appends `/iac/gate-check` itself. `resources` already in nimbus_app's
     own gate-check shape (see resource_mapping.py) -- this function does
-    no further transformation."""
+    no further transformation. `source` (repo/branch/commit/PR/
+    ci_provider, see ci_source.py) is sent unchanged on EVERY batch, so
+    the persisted IacScan(s) for one CI run all carry the same origin."""
     if not resources:
         return GateCheckResult(passed=True, results=[])
 
     passed = True
     all_results: list[dict[str, Any]] = []
+    scan_ids: list[str] = []
     for i in range(0, len(resources), GATE_CHECK_BATCH_SIZE):
         batch = resources[i:i + GATE_CHECK_BATCH_SIZE]
+        request_body: dict[str, Any] = {"resources": batch}
+        if source is not None:
+            request_body["source"] = source
         try:
             response = requests.post(
                 f"{api_url.rstrip('/')}/iac/gate-check",
-                json={"resources": batch},
+                json=request_body,
                 headers={"X-API-Key": api_key},
                 timeout=DEFAULT_TIMEOUT_SECONDS,
             )
@@ -64,5 +81,8 @@ def run_gate_check(api_url: str, api_key: str, resources: list[dict[str, Any]]) 
         if body.get("passed") is False:
             passed = False
         all_results.extend(body.get("results", []))
+        scan_id = body.get("scan_id")
+        if scan_id:
+            scan_ids.append(str(scan_id))
 
-    return GateCheckResult(passed=passed, results=all_results)
+    return GateCheckResult(passed=passed, results=all_results, scan_ids=scan_ids)
