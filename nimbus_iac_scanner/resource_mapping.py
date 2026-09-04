@@ -1280,6 +1280,59 @@ def _map_azure_function_app(key: ResourceKey, body: dict[str, Any], _all_resourc
 
 
 # ---------------------------------------------------------------------------
+# AKS cluster (NG-AZURE-AKS-001..007). endpoint_public_access = NOT
+# private_cluster_enabled (default false -> public); rbac_enabled
+# (role_based_access_control_enabled, default true); network_policy_enabled
+# (network_profile.network_policy set and != none); local_accounts_disabled
+# (local_account_disabled, default false); managed_identity_enabled (an
+# identity block); policy_addon_enabled (azure_policy_enabled, default
+# false); control_plane_logging_enabled (a diagnostic setting on the cluster
+# with an enabled log). Bicep omits control_plane_logging (child resource).
+# ---------------------------------------------------------------------------
+
+def _map_azure_aks_cluster(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    np = _first_block(body, "network_profile")
+    return {
+        "provider": "azure",
+        "resource_type": "aks_cluster",
+        "configuration": {
+            "endpoint_public_access": not bool(body.get("private_cluster_enabled", False)),
+            "rbac_enabled": bool(body.get("role_based_access_control_enabled", True)),
+            "network_policy_enabled": np is not None and str(np.get("network_policy") or "").lower() not in ("", "none"),
+            "local_accounts_disabled": bool(body.get("local_account_disabled", False)),
+            "managed_identity_enabled": _first_block(body, "identity") is not None,
+            "policy_addon_enabled": bool(body.get("azure_policy_enabled", False)),
+            "control_plane_logging_enabled": _diagnostic_setting_has_enabled_log("azurerm_kubernetes_cluster", key[1], all_resources),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_kubernetes_cluster.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Recovery Services vault (NG-AZURE-RECOVERYSERVICES-001..004).
+# public_network_access_enabled (default true); immutability_enabled
+# (immutability Locked/Unlocked, default Disabled); soft_delete_enabled
+# (default true); cmk_encryption_enabled (an encryption block with a key_id).
+# ---------------------------------------------------------------------------
+
+def _map_azure_recovery_services_vault(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    enc = _first_block(body, "encryption")
+    return {
+        "provider": "azure",
+        "resource_type": "recovery_services_vault",
+        "configuration": {
+            "public_network_access_enabled": bool(body.get("public_network_access_enabled", True)),
+            "immutability_enabled": str(body.get("immutability") or "Disabled").lower() in ("locked", "unlocked"),
+            "soft_delete_enabled": bool(body.get("soft_delete_enabled", True)),
+            "cmk_encryption_enabled": enc is not None and bool(enc.get("key_id")),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_recovery_services_vault.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -1907,6 +1960,8 @@ _MAPPERS = {
     "azurerm_linux_function_app": _map_azure_function_app,
     "azurerm_windows_function_app": _map_azure_function_app,
     "azurerm_function_app": _map_azure_function_app,
+    "azurerm_kubernetes_cluster": _map_azure_aks_cluster,
+    "azurerm_recovery_services_vault": _map_azure_recovery_services_vault,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

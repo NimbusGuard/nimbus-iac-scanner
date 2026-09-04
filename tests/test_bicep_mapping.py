@@ -284,3 +284,36 @@ def test_web_site_logic_app_workflow_is_app_service_not_function():
     # functionapp,workflowapp is a Logic App Standard -> NOT a function app
     e = _one({"type": "Microsoft.Web/sites", "kind": "functionapp,workflowapp", "properties": {}})
     assert e["resource_type"] == "app_service"
+
+
+# --- aks_cluster / recovery_services_vault (Bicep) ------------------------
+
+def test_aks_bicep_hardened():
+    e = _one({"type": "Microsoft.ContainerService/managedClusters", "identity": {"type": "SystemAssigned"}, "properties": {
+        "apiServerAccessProfile": {"enablePrivateCluster": True}, "enableRBAC": True,
+        "disableLocalAccounts": True, "networkProfile": {"networkPolicy": "azure"},
+        "addonProfiles": {"azurepolicy": {"enabled": True}},
+    }})
+    assert e["configuration"] == {
+        "endpoint_public_access": False, "rbac_enabled": True, "network_policy_enabled": True,
+        "local_accounts_disabled": True, "managed_identity_enabled": True, "policy_addon_enabled": True,
+    }
+
+
+def test_aks_bicep_defaults():
+    e = _one({"type": "Microsoft.ContainerService/managedClusters", "properties": {}})
+    assert e["configuration"]["endpoint_public_access"] is True
+    assert e["configuration"]["rbac_enabled"] is True
+    assert e["configuration"]["policy_addon_enabled"] is False
+
+
+def test_recovery_vault_bicep():
+    e = _one({"type": "Microsoft.RecoveryServices/vaults", "properties": {
+        "publicNetworkAccess": "Disabled",
+        "securitySettings": {"immutabilitySettings": {"state": "Locked"}, "softDeleteSettings": {"softDeleteState": "Enabled"}},
+        "encryption": {"keyVaultProperties": {"keyUri": "https://kv.vault.azure.net/keys/k"}},
+    }})
+    assert e["configuration"] == {
+        "public_network_access_enabled": False, "immutability_enabled": True,
+        "soft_delete_enabled": True, "cmk_encryption_enabled": True,
+    }

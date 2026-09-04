@@ -323,6 +323,37 @@ def _map_web_site(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, A
             "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Web/sites.{key[1]}"}
 
 
+def _map_aks_cluster(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    api = p.get("apiServerAccessProfile") or {}
+    net = p.get("networkProfile") or {}
+    addons = p.get("addonProfiles") or {}
+    policy = addons.get("azurepolicy") or {}
+    identity = resource.get("identity") or {}
+    return {"provider": "azure", "resource_type": "aks_cluster", "configuration": {
+        "endpoint_public_access": not bool(api.get("enablePrivateCluster", False)),
+        "rbac_enabled": bool(p.get("enableRBAC", True)),
+        "network_policy_enabled": str(net.get("networkPolicy") or "").lower() not in ("", "none"),
+        "local_accounts_disabled": bool(p.get("disableLocalAccounts", False)),
+        "managed_identity_enabled": bool(identity.get("type") and str(identity.get("type")).lower() != "none"),
+        "policy_addon_enabled": bool(policy.get("enabled", False)),
+    }, "tags": resource.get("tags") or {}, "identifier": f"Microsoft.ContainerService/managedClusters.{key[1]}"}
+
+
+def _map_recovery_services_vault(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    sec = p.get("securitySettings") or {}
+    imm = (sec.get("immutabilitySettings") or {}).get("state")
+    sd = (sec.get("softDeleteSettings") or {}).get("softDeleteState")
+    keyvault = (p.get("encryption") or {}).get("keyVaultProperties") or {}
+    return {"provider": "azure", "resource_type": "recovery_services_vault", "configuration": {
+        "public_network_access_enabled": str(p.get("publicNetworkAccess", "Enabled")).lower() != "disabled",
+        "immutability_enabled": str(imm or "Disabled").lower() in ("locked", "unlocked"),
+        "soft_delete_enabled": str(sd or "Enabled").lower() in ("enabled", "alwayson"),
+        "cmk_encryption_enabled": bool(keyvault.get("keyUri")),
+    }, "tags": resource.get("tags") or {}, "identifier": f"Microsoft.RecoveryServices/vaults.{key[1]}"}
+
+
 _MAPPERS = {
     "Microsoft.Network/networkSecurityGroups": _map_network_security_group,
     "Microsoft.Storage/storageAccounts": _map_storage_account,
@@ -345,6 +376,8 @@ _MAPPERS = {
     "Microsoft.Storage/storageAccounts/blobServices/containers": _map_storage_container,
     "Microsoft.Sql/servers": _map_sql_server,
     "Microsoft.Web/sites": _map_web_site,
+    "Microsoft.ContainerService/managedClusters": _map_aks_cluster,
+    "Microsoft.RecoveryServices/vaults": _map_recovery_services_vault,
 }
 
 

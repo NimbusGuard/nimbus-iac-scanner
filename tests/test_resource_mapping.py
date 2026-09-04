@@ -1915,3 +1915,64 @@ resource "azurerm_linux_function_app" "fn" {
 def test_azure_function_app_defaults():
     r = parse_source('resource "azurerm_function_app" "fn" { name = "fn" }')
     assert map_resources(r)[0]["configuration"] == {"https_only": False, "public_network_access_enabled": True}
+
+
+# --- azurerm aks_cluster (NG-AZURE-AKS-001..007) --------------------------
+
+def test_azure_aks_hardened():
+    r = parse_source('''
+resource "azurerm_kubernetes_cluster" "k" {
+  name = "k" dns_prefix = "k"
+  private_cluster_enabled          = true
+  role_based_access_control_enabled = true
+  local_account_disabled           = true
+  azure_policy_enabled             = true
+  identity { type = "SystemAssigned" }
+  network_profile { network_policy = "azure" }
+}
+resource "azurerm_monitor_diagnostic_setting" "ds" {
+  name = "ds" target_resource_id = azurerm_kubernetes_cluster.k.id
+  enabled_log { category = "kube-audit" }
+}
+''')
+    entry = [e for e in map_resources(r) if e["resource_type"] == "aks_cluster"][0]
+    assert entry["configuration"] == {
+        "endpoint_public_access": False, "rbac_enabled": True, "network_policy_enabled": True,
+        "local_accounts_disabled": True, "managed_identity_enabled": True, "policy_addon_enabled": True,
+        "control_plane_logging_enabled": True,
+    }
+
+
+def test_azure_aks_insecure_defaults():
+    r = parse_source('resource "azurerm_kubernetes_cluster" "k" { name = "k" dns_prefix = "k" }')
+    assert map_resources(r)[0]["configuration"] == {
+        "endpoint_public_access": True, "rbac_enabled": True, "network_policy_enabled": False,
+        "local_accounts_disabled": False, "managed_identity_enabled": False, "policy_addon_enabled": False,
+        "control_plane_logging_enabled": False,
+    }
+
+
+# --- azurerm recovery_services_vault --------------------------------------
+
+def test_azure_recovery_vault_hardened():
+    r = parse_source('''
+resource "azurerm_recovery_services_vault" "v" {
+  name = "v" location = "e" resource_group_name = "rg" sku = "Standard"
+  public_network_access_enabled = false
+  immutability                  = "Locked"
+  soft_delete_enabled           = true
+  encryption { key_id = "https://kv.vault.azure.net/keys/k" infrastructure_encryption_enabled = true }
+}
+''')
+    assert map_resources(r)[0]["configuration"] == {
+        "public_network_access_enabled": False, "immutability_enabled": True,
+        "soft_delete_enabled": True, "cmk_encryption_enabled": True,
+    }
+
+
+def test_azure_recovery_vault_defaults():
+    r = parse_source('resource "azurerm_recovery_services_vault" "v" { name = "v" location = "e" resource_group_name = "rg" sku = "Standard" }')
+    assert map_resources(r)[0]["configuration"] == {
+        "public_network_access_enabled": True, "immutability_enabled": False,
+        "soft_delete_enabled": True, "cmk_encryption_enabled": False,
+    }
