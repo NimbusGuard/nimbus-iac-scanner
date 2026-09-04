@@ -2009,3 +2009,52 @@ resource "azurerm_application_gateway" "gw" { name = "gw" location = "e" resourc
 def test_azure_application_gateway_defaults():
     r = parse_source('resource "azurerm_application_gateway" "gw" { name = "gw" location = "e" resource_group_name = "rg" }')
     assert map_resources(r)[0]["configuration"] == {"waf_enabled": False, "diagnostic_logging_enabled": False}
+
+
+# --- azurerm network_security_group (NG-AZURE-NET-*) ----------------------
+
+def test_azure_nsg_inline_rules_and_flow_logs():
+    r = parse_source('''
+resource "azurerm_network_security_group" "nsg" {
+  name = "nsg" location = "e" resource_group_name = "rg"
+  security_rule {
+    name = "allow-ssh" priority = 100 direction = "Inbound" access = "Allow"
+    protocol = "Tcp" source_port_range = "*" destination_port_range = "22"
+    source_address_prefix = "*" destination_address_prefix = "*"
+  }
+}
+resource "azurerm_network_watcher_flow_log" "fl" {
+  name = "fl" network_watcher_name = "nw" resource_group_name = "rg"
+  network_security_group_id = azurerm_network_security_group.nsg.id
+  enabled = true
+}
+''')
+    entry = [e for e in map_resources(r) if e["resource_type"] == "network_security_group"][0]
+    assert entry["configuration"]["rules"] == [{
+        "name": "allow-ssh", "direction": "Inbound", "access": "Allow", "protocol": "Tcp",
+        "destination_port_range": "22", "source_address_prefix": "*",
+    }]
+    assert entry["configuration"]["flow_logs_enabled"] is True
+
+
+def test_azure_nsg_standalone_rule_and_no_flow_logs():
+    r = parse_source('''
+resource "azurerm_network_security_group" "nsg" { name = "nsg" location = "e" resource_group_name = "rg" }
+resource "azurerm_network_security_rule" "r" {
+  name = "deny" priority = 200 direction = "Inbound" access = "Deny"
+  protocol = "*" source_port_range = "*" destination_port_range = "3389"
+  source_address_prefix = "Internet" destination_address_prefix = "*"
+  resource_group_name = "rg" network_security_group_name = azurerm_network_security_group.nsg.name
+}
+''')
+    entry = [e for e in map_resources(r) if e["resource_type"] == "network_security_group"][0]
+    assert entry["configuration"]["rules"] == [{
+        "name": "deny", "direction": "Inbound", "access": "Deny", "protocol": "*",
+        "destination_port_range": "3389", "source_address_prefix": "Internet",
+    }]
+    assert entry["configuration"]["flow_logs_enabled"] is False
+
+
+def test_azure_nsg_empty():
+    r = parse_source('resource "azurerm_network_security_group" "nsg" { name = "nsg" location = "e" resource_group_name = "rg" }')
+    assert map_resources(r)[0]["configuration"] == {"rules": [], "flow_logs_enabled": False}

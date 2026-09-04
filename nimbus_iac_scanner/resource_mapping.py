@@ -1360,6 +1360,51 @@ def _map_azure_application_gateway(key: ResourceKey, body: dict[str, Any], all_r
 
 
 # ---------------------------------------------------------------------------
+# Network Security Group (NG-AZURE-NET-001..006/009/011..018 rules, NET-007
+# flow logs). rules = inline security_rule blocks + standalone azurerm_
+# network_security_rule resources, each flattened to {name, direction,
+# access, protocol, destination_port_range, source_address_prefix} -- the
+# SINGULAR port/prefix fields, matching the control (and collector) exactly
+# (both read only the singular; a rule using the plural *_ranges/*_prefixes
+# is treated the same as the collector treats it). flow_logs_enabled
+# correlates an enabled azurerm_network_watcher_flow_log targeting this NSG
+# (Bicep flow logs are a separate resource -> the Bicep NSG mapper is
+# rules-only, so NET-007 is NOT_EVALUATED there).
+# ---------------------------------------------------------------------------
+
+def _nsg_rule(block: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "name": block.get("name"),
+        "direction": block.get("direction"),
+        "access": block.get("access"),
+        "protocol": block.get("protocol"),
+        "destination_port_range": block.get("destination_port_range"),
+        "source_address_prefix": block.get("source_address_prefix"),
+    }
+
+
+def _map_azure_network_security_group(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    rules = [_nsg_rule(b) for b in _as_block_list(body.get("security_rule"))]
+    flow_logs = False
+    for (resource_type, _name), r in all_resources.items():
+        if resource_type == "azurerm_network_security_rule":
+            ref = resolve_reference(r.get("network_security_group_name"))
+            if (ref is not None and ref[0] == "azurerm_network_security_group" and ref[1] == key[1]) or r.get("network_security_group_name") == key[1]:
+                rules.append(_nsg_rule(r))
+        elif resource_type == "azurerm_network_watcher_flow_log" and bool(r.get("enabled", False)):
+            ref = resolve_reference(r.get("network_security_group_id"))
+            if ref is not None and ref[0] == "azurerm_network_security_group" and ref[1] == key[1]:
+                flow_logs = True
+    return {
+        "provider": "azure",
+        "resource_type": "network_security_group",
+        "configuration": {"rules": rules, "flow_logs_enabled": flow_logs},
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_network_security_group.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -1990,6 +2035,7 @@ _MAPPERS = {
     "azurerm_kubernetes_cluster": _map_azure_aks_cluster,
     "azurerm_recovery_services_vault": _map_azure_recovery_services_vault,
     "azurerm_application_gateway": _map_azure_application_gateway,
+    "azurerm_network_security_group": _map_azure_network_security_group,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -2021,6 +2067,8 @@ _CONSUMED_ONLY = {
     "azurerm_mssql_server_transparent_data_encryption",  # merged into a server's tde_with_cmk
     "azurerm_mssql_server_security_alert_policy",  # merged into a server's threat_detection
     "azurerm_mssql_firewall_rule",  # merged into a server's firewall_allows_all_networks
+    "azurerm_network_security_rule",  # merged into an NSG's rules
+    "azurerm_network_watcher_flow_log",  # merged into an NSG's flow_logs_enabled
 }
 
 

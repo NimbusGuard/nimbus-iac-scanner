@@ -56,7 +56,7 @@
 - [x] * -- N/A: the wildcard target is the vulnerability/side-channel control family, not an IaC-declarable resource type
 
 ## Queue — Azure (30, via Terraform azurerm_* + Bicep)
-- [ ] network_security_group (16 controls)
+- [x] network_security_group (16 controls) -- azurerm rules+flow_logs (Bicep rules-only already existed); custom rule-matching like security_group
 - [ ] storage_account (14 controls)
 - [ ] virtual_machine (13 controls)
 - [x] sql_server (10 controls) -- azurerm (5 inline + 5 cross-resource children); Bicep inline-only (children are ARM sub-resources)
