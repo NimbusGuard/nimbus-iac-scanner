@@ -47,10 +47,13 @@ runs:
     - name: Install bicep CLI
       if: ${{ inputs.install-bicep == 'true' }}
       shell: bash
+      # Download to $RUNNER_TEMP, NEVER a bare `bicep` in the checkout: a repo
+      # that organizes its Bicep under a `bicep/` directory (very common) would
+      # otherwise collide -- `curl -Lo bicep` fails with "Is a directory".
       run: |
-        curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
-        chmod +x ./bicep
-        sudo mv ./bicep /usr/local/bin/bicep
+        curl -Lo "$RUNNER_TEMP/bicep" https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+        chmod +x "$RUNNER_TEMP/bicep"
+        sudo mv "$RUNNER_TEMP/bicep" /usr/local/bin/bicep
 
     - name: Run scan
       shell: bash
