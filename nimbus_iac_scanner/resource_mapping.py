@@ -932,6 +932,51 @@ def _map_azure_mysql_server(key: ResourceKey, body: dict[str, Any], all_resource
 
 
 # ---------------------------------------------------------------------------
+# Key Vault (NG-AZURE-KEYVAULT-002/003/004/005/007). purge_protection
+# (default false), public_network_access (default true), rbac_authorization
+# (default false; both current rbac_authorization_enabled and legacy
+# enable_rbac_authorization), soft_delete_retention_days (default 90).
+# logging_enabled correlates an azurerm_monitor_diagnostic_setting targeting
+# the vault with at least one enabled log. access_policies (NG-AZURE-
+# KEYVAULT-008, custom) is OMITTED (its control-side shape isn't a simple
+# flag) -> NOT_EVALUATED rather than a fabricated verdict.
+# ---------------------------------------------------------------------------
+
+def _diagnostic_setting_has_enabled_log(target_tf_type: str, target_tf_name: str, all_resources: dict[ResourceKey, dict[str, Any]]) -> bool:
+    for (resource_type, _name), ds in all_resources.items():
+        if resource_type != "azurerm_monitor_diagnostic_setting":
+            continue
+        ref = resolve_reference(ds.get("target_resource_id"))
+        if not (ref is not None and ref[0] == target_tf_type and ref[1] == target_tf_name):
+            continue
+        # newer azurerm: any enabled_log {} block means that log is on
+        if _as_block_list(ds.get("enabled_log")):
+            return True
+        # legacy: a log {} block with enabled = true
+        for log in _as_block_list(ds.get("log")):
+            if bool(log.get("enabled", False)):
+                return True
+    return False
+
+
+def _map_azure_key_vault(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    rbac = body.get("rbac_authorization_enabled", body.get("enable_rbac_authorization", False))
+    return {
+        "provider": "azure",
+        "resource_type": "key_vault",
+        "configuration": {
+            "purge_protection_enabled": bool(body.get("purge_protection_enabled", False)),
+            "public_network_access_enabled": bool(body.get("public_network_access_enabled", True)),
+            "rbac_authorization_enabled": bool(rbac),
+            "soft_delete_retention_days": int(body.get("soft_delete_retention_days", 90)),
+            "logging_enabled": _diagnostic_setting_has_enabled_log("azurerm_key_vault", key[1], all_resources),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_key_vault.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -1539,6 +1584,7 @@ _MAPPERS = {
     "azurerm_cosmosdb_account": _map_azure_cosmosdb_account,
     "azurerm_postgresql_flexible_server": _map_azure_postgresql_server,
     "azurerm_mysql_flexible_server": _map_azure_mysql_server,
+    "azurerm_key_vault": _map_azure_key_vault,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -1565,6 +1611,7 @@ _CONSUMED_ONLY = {
     "aws_network_acl_rule",  # merged into its NACL's entries
     "azurerm_postgresql_flexible_server_configuration",  # merged into ssl_enforced
     "azurerm_mysql_flexible_server_configuration",  # merged into ssl_enforced
+    "azurerm_monitor_diagnostic_setting",  # merged into a target resource's logging_enabled
 }
 
 

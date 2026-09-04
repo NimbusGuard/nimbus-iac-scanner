@@ -1604,3 +1604,50 @@ resource "azurerm_mysql_flexible_server" "db" { name = "db" geo_redundant_backup
     assert entry["resource_type"] == "mysql_server"
     assert entry["configuration"]["geo_redundant_backup_enabled"] is True
     assert entry["configuration"]["ssl_enforced"] is True  # default require_secure_transport ON
+
+
+# --- azurerm key_vault (NG-AZURE-KEYVAULT-002/003/004/005/007) -------------
+
+def test_azure_key_vault_hardened_with_diagnostic_logging():
+    resources = parse_source('''
+resource "azurerm_key_vault" "kv" {
+  name                          = "kv"
+  purge_protection_enabled      = true
+  public_network_access_enabled = false
+  rbac_authorization_enabled    = true
+  soft_delete_retention_days    = 90
+}
+resource "azurerm_monitor_diagnostic_setting" "ds" {
+  name               = "ds"
+  target_resource_id = azurerm_key_vault.kv.id
+  enabled_log { category = "AuditEvent" }
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "key_vault"][0]
+    assert entry["configuration"] == {
+        "purge_protection_enabled": True, "public_network_access_enabled": False,
+        "rbac_authorization_enabled": True, "soft_delete_retention_days": 90, "logging_enabled": True,
+    }
+    assert "access_policies" not in entry["configuration"]  # custom, deliberately NOT_EVALUATED
+
+
+def test_azure_key_vault_insecure_defaults():
+    resources = parse_source('resource "azurerm_key_vault" "kv" { name = "kv" }')
+    assert map_resources(resources)[0]["configuration"] == {
+        "purge_protection_enabled": False, "public_network_access_enabled": True,
+        "rbac_authorization_enabled": False, "soft_delete_retention_days": 90, "logging_enabled": False,
+    }
+
+
+def test_azure_key_vault_legacy_rbac_attr_and_legacy_log_block():
+    resources = parse_source('''
+resource "azurerm_key_vault" "kv" { name = "kv" enable_rbac_authorization = true }
+resource "azurerm_monitor_diagnostic_setting" "ds" {
+  name               = "ds"
+  target_resource_id = azurerm_key_vault.kv.id
+  log { category = "AuditEvent" enabled = true }
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "key_vault"][0]
+    assert entry["configuration"]["rbac_authorization_enabled"] is True
+    assert entry["configuration"]["logging_enabled"] is True

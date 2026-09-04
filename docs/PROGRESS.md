@@ -62,7 +62,7 @@
 - [ ] sql_server (10 controls)
 - [ ] aks_cluster (7 controls)
 - [ ] app_service (7 controls)
-- [ ] key_vault (6 controls)
+- [x] key_vault (5 of 6 controls) -- azurerm + Bicep; access_policies (custom) omitted; logging via diagnostic-setting (TF only)
 - [ ] container_registry (5 controls)
 - [x] postgresql_server (4 controls) -- azurerm(flexible)+Bicep; ssl via require_secure_transport config (default ON)
 - [x] mysql_server (4 controls) -- azurerm(flexible)+Bicep; ssl via require_secure_transport config (default ON)

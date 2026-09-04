@@ -127,3 +127,28 @@ def test_mysql_flexible_bicep_defaults():
     entry = _one({"type": "Microsoft.DBforMySQL/flexibleServers", "properties": {}})
     assert entry["resource_type"] == "mysql_server"
     assert entry["configuration"] == {"geo_redundant_backup_enabled": False, "backup_retention_days": 7}
+
+
+# --- key_vault -------------------------------------------------------------
+
+def test_key_vault_hardened_bicep():
+    entry = _one({
+        "type": "Microsoft.KeyVault/vaults",
+        "properties": {
+            "enablePurgeProtection": True, "enableRbacAuthorization": True,
+            "publicNetworkAccess": "Disabled", "softDeleteRetentionInDays": 90,
+        },
+    })
+    assert entry["configuration"] == {
+        "purge_protection_enabled": True, "rbac_authorization_enabled": True,
+        "soft_delete_retention_days": 90, "public_network_access_enabled": False,
+    }
+    assert "logging_enabled" not in entry["configuration"]
+
+
+def test_key_vault_defaults_bicep():
+    entry = _one({"type": "Microsoft.KeyVault/vaults", "properties": {}})
+    assert entry["configuration"] == {
+        "purge_protection_enabled": False, "rbac_authorization_enabled": False,
+        "soft_delete_retention_days": 90, "public_network_access_enabled": True,
+    }

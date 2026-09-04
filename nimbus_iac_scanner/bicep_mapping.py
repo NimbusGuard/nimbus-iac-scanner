@@ -140,6 +140,30 @@ def _map_mysql_server(key: tuple[str, str], resource: dict[str, Any]) -> dict[st
     return _map_flexible_db(key, resource, "mysql_server", "Microsoft.DBforMySQL/flexibleServers")
 
 
+def _map_key_vault(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    """Microsoft.KeyVault/vaults (NG-AZURE-KEYVAULT-002/003/004/007). logging_
+    enabled (a diagnostic setting) and access_policies (custom) are omitted --
+    the former is a separate resource with no cross-resource view here."""
+    properties = resource.get("properties") or {}
+    pna = properties.get("publicNetworkAccess")
+    configuration: dict[str, Any] = {
+        "purge_protection_enabled": bool(properties.get("enablePurgeProtection", False)),
+        "rbac_authorization_enabled": bool(properties.get("enableRbacAuthorization", False)),
+        "soft_delete_retention_days": int(properties.get("softDeleteRetentionInDays", 90)),
+    }
+    if pna is not None:
+        configuration["public_network_access_enabled"] = str(pna).lower() != "disabled"
+    else:
+        configuration["public_network_access_enabled"] = True
+    return {
+        "provider": "azure",
+        "resource_type": "key_vault",
+        "configuration": configuration,
+        "tags": resource.get("tags") or {},
+        "identifier": f"Microsoft.KeyVault/vaults.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "Microsoft.Network/networkSecurityGroups": _map_network_security_group,
     "Microsoft.Storage/storageAccounts": _map_storage_account,
@@ -147,6 +171,7 @@ _MAPPERS = {
     "Microsoft.DocumentDB/databaseAccounts": _map_cosmosdb_account,
     "Microsoft.DBforPostgreSQL/flexibleServers": _map_postgresql_server,
     "Microsoft.DBforMySQL/flexibleServers": _map_mysql_server,
+    "Microsoft.KeyVault/vaults": _map_key_vault,
 }
 
 
