@@ -91,7 +91,33 @@ def _md_cell(value: Any) -> str:
     return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ").strip()
 
 
-def format_markdown_report(results: list[dict[str, Any]], unmapped_resource_types: set[str]) -> str:
+def _resource_link(
+    identifier: Optional[str],
+    source_by_identifier: Optional[dict],
+    blob_base: Optional[str],
+) -> str:
+    """The Resource table cell: `identifier` in code, made a clickable link
+    to `<blob_base>/<file>#L<line>` when the source location is known and the
+    file path is repo-root-relative (the standard CI checkout). Falls back to
+    plain code otherwise -- never a broken link."""
+    code = f"`{_md_cell(identifier or '—')}`"
+    if not (identifier and source_by_identifier and blob_base):
+        return code
+    src = source_by_identifier.get(identifier) or {}
+    file = src.get("file")
+    if not file or file.startswith("/") or file.startswith(".."):
+        return code
+    from urllib.parse import quote
+    anchor = f"#L{src['line']}" if src.get("line") else ""
+    return f"[{code}]({blob_base}/{quote(file)}{anchor})"
+
+
+def format_markdown_report(
+    results: list[dict[str, Any]],
+    unmapped_resource_types: set[str],
+    source_by_identifier: Optional[dict] = None,
+    blob_base: Optional[str] = None,
+) -> str:
     from collections import Counter
 
     failing = [r for r in results if r.get("status") == "FAIL"]
@@ -119,7 +145,7 @@ def format_markdown_report(results: list[dict[str, Any]], unmapped_resource_type
     def sort_key(r: dict[str, Any]) -> tuple:
         return (-SEVERITY_RANK.get(r.get("severity"), -1), r.get("identifier") or "", r.get("control_id") or "")
 
-    out.append(f"<details open><summary><b>View all {len(failing)} findings</b></summary>")
+    out.append(f"<details><summary><b>View all {len(failing)} findings</b></summary>")
     out.append("")
     out.append("| Severity | Resource | Control | Issue |")
     out.append("|:--|:--|:--|:--|")
@@ -127,8 +153,9 @@ def format_markdown_report(results: list[dict[str, Any]], unmapped_resource_type
         sev = r.get("severity") or "UNKNOWN"
         badge = _SEVERITY_BADGE.get(sev, sev)
         issue = r.get("message") or r.get("control_name") or ""
+        resource = _resource_link(r.get("identifier"), source_by_identifier, blob_base)
         out.append(
-            f"| {badge} | `{_md_cell(r.get('identifier') or '—')}` "
+            f"| {badge} | {resource} "
             f"| `{_md_cell(r.get('control_id') or '—')}` | {_md_cell(issue)} |"
         )
     out += ["", "</details>"]

@@ -21,6 +21,8 @@ from typing import Any
 
 import yaml
 
+from nimbus_iac_scanner import source_location
+
 # (template_file_path, logical_id) -- unlike Terraform, where a
 # resource's own (type, name) pair is already globally unique across an
 # entire combined configuration by design, a CloudFormation logical id
@@ -114,5 +116,10 @@ def parse_directory(path: str, only_files: "set[str] | None" = None) -> dict[Res
                 continue
             with open(tpl_file, encoding="utf-8") as f:
                 text = f.read()
-            resources.update(parse_source(text, is_yaml, file_key=str(tpl_file)))
+            file_resources = parse_source(text, is_yaml, file_key=str(tpl_file))
+            for (_file_key, logical_id), body in file_resources.items():
+                source_location.attach(
+                    body, str(tpl_file), source_location.cloudformation_decl_line(text, logical_id),
+                )
+            resources.update(file_resources)
     return resources

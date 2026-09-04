@@ -23,6 +23,8 @@ real evaluation-engine control source before writing this file:
   omitted entirely as `False` when absent."""
 from typing import Any
 
+from nimbus_iac_scanner import source_location
+
 
 def _map_network_security_group(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
     properties = resource.get("properties") or {}
@@ -454,7 +456,7 @@ def map_resources(all_resources: dict[tuple[str, str], dict[str, Any]]) -> list[
         mapper = _MAPPERS.get(resource.get("type"))
         if mapper is None:
             continue
-        mapped.append(mapper(key, resource))
+        mapped.append(source_location.enrich(mapper(key, resource), resource))
     return mapped
 
 

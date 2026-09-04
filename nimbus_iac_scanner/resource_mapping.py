@@ -32,6 +32,7 @@ never guessed."""
 import json
 from typing import Any, Optional
 
+from nimbus_iac_scanner import source_location
 from nimbus_iac_scanner.terraform_parser import resolve_reference
 
 ResourceKey = tuple[str, str]
@@ -2211,7 +2212,7 @@ def map_resources(all_resources: dict[ResourceKey, dict[str, Any]]) -> list[dict
         mapper = _MAPPERS.get(resource_type)
         if mapper is None:
             continue
-        mapped.append(mapper(key, body, all_resources))
+        mapped.append(source_location.enrich(mapper(key, body, all_resources), body))
     return mapped
 
 

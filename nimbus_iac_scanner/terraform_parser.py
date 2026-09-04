@@ -22,6 +22,8 @@ from typing import Any
 
 import hcl2
 
+from nimbus_iac_scanner import source_location
+
 # A Terraform-native reference expression, e.g. "${aws_s3_bucket.data.id}"
 # -- resolved (not evaluated) into its own (resource_type, resource_name,
 # attribute) triple by resolve_reference() below. Terraform 0.12+ also
@@ -50,7 +52,13 @@ def parse_directory(path: str, only_files: "set[str] | None" = None) -> dict[tup
             continue
         with open(tf_file, encoding="utf-8") as f:
             text = f.read()
-        resources.update(parse_source(text))
+        file_resources = parse_source(text)
+        for (resource_type, resource_name), body in file_resources.items():
+            source_location.attach(
+                body, str(tf_file),
+                source_location.terraform_decl_line(text, resource_type, resource_name),
+            )
+        resources.update(file_resources)
     return resources
 
 

@@ -16,6 +16,7 @@ look like a template), and Bicep (`*.bicep`, compiled via the real
 gate-check call and one combined report.
 """
 import argparse
+import json
 import os
 import sys
 
@@ -168,7 +169,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nRecorded in NimbusGuard: scan {', '.join(result.scan_ids)}", file=sys.stderr)
 
     if args.post_pr_comment or args.post_mr_comment:
-        markdown_report = format_markdown_report(result.results, unmapped)
+        # identifier -> (file, line), so the comment can link each finding back
+        # to its exact declaration in the repo (the response echoes the same
+        # identifier we sent each resource under).
+        source_by_identifier = {
+            r["identifier"]: {"file": r.get("source_file"), "line": r.get("source_line")}
+            for r in mapped if r.get("identifier")
+        }
+        markdown_report = format_markdown_report(
+            result.results, unmapped, source_by_identifier, _blob_base_url(),
+        )
         if args.post_pr_comment:
             _try_post_pr_comment(markdown_report)
         if args.post_mr_comment:
@@ -231,6 +241,46 @@ def _try_post_mr_comment(report: str) -> None:
         post_or_update_mr_comment(gitlab_url, project_id, mr_iid, token, report)
     except MrCommentError as e:
         print(f"warning: could not post the MR comment: {e}", file=sys.stderr)
+
+
+def _github_pr_head_sha() -> "str | None":
+    """The PR's own head commit SHA from the GitHub Actions event payload --
+    a precise, stable blob ref for the file links (GITHUB_SHA on a
+    pull_request event is the temporary merge commit, which links less
+    cleanly). `None` outside a PR run."""
+    path = os.environ.get("GITHUB_EVENT_PATH")
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            event = json.load(f)
+    except (OSError, ValueError):
+        return None
+    pr = event.get("pull_request")
+    head = pr.get("head") if isinstance(pr, dict) else None
+    sha = head.get("sha") if isinstance(head, dict) else None
+    return sha if isinstance(sha, str) else None
+
+
+def _blob_base_url() -> "str | None":
+    """`https://.../blob/<ref>` for the current repo, used to link a finding
+    to its source file:line in the PR/MR comment. `None` when not running in a
+    recognized CI (a local run -- no repo to link into)."""
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    if repo:
+        ref = (
+            _github_pr_head_sha()
+            or os.environ.get("GITHUB_SHA")
+            or os.environ.get("GITHUB_HEAD_REF")
+            or os.environ.get("GITHUB_REF_NAME")
+        )
+        return f"https://github.com/{repo}/blob/{ref}" if ref else None
+    server = os.environ.get("CI_SERVER_URL")
+    project = os.environ.get("CI_PROJECT_PATH")
+    ref = os.environ.get("CI_COMMIT_SHA") or os.environ.get("CI_COMMIT_REF_NAME")
+    if server and project and ref:
+        return f"{server.rstrip('/')}/{project}/-/blob/{ref}"
+    return None
 
 
 if __name__ == "__main__":

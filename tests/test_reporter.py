@@ -106,3 +106,27 @@ def test_markdown_escapes_pipes_in_cells():
 def test_markdown_notes_unmapped_types():
     md = format_markdown_report([_fail("r", "C", "LOW", "m")], {"aws_foo", "azurerm_bar"})
     assert "2 resource type(s) aren't mapped" in md
+
+
+def test_markdown_findings_are_collapsed_by_default():
+    md = format_markdown_report([_fail("r", "C", "LOW", "m")], set())
+    assert "<details>" in md and "<details open>" not in md
+
+
+def test_markdown_links_resource_to_source_when_known():
+    src = {"aws_s3_bucket.a": {"file": "terraform/aws.tf", "line": 13}}
+    md = format_markdown_report(
+        [_fail("aws_s3_bucket.a", "NG-AWS-S3-001", "CRITICAL", "public")],
+        set(), src, "https://github.com/o/r/blob/sha",
+    )
+    assert "[`aws_s3_bucket.a`](https://github.com/o/r/blob/sha/terraform/aws.tf#L13)" in md
+
+
+def test_markdown_no_link_without_blob_base_or_absolute_path():
+    src = {"r": {"file": "/abs/path.tf", "line": 3}}
+    # absolute path -> no link (only repo-root-relative paths link correctly)
+    md = format_markdown_report([_fail("r", "C", "LOW", "m")], set(), src, "https://github.com/o/r/blob/sha")
+    assert "https://github.com/o/r/blob/sha" not in md
+    # no blob base (local run) -> plain code, no link
+    md2 = format_markdown_report([_fail("r", "C", "LOW", "m")], set(), {"r": {"file": "a.tf", "line": 1}}, None)
+    assert "](http" not in md2

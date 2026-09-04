@@ -25,6 +25,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from nimbus_iac_scanner import source_location
+
 ResourceKey = tuple[str, str]
 
 BICEP_CLI_NAME = "bicep"
@@ -91,9 +93,17 @@ def parse_directory(path: str, only_files: "set[str] | None" = None) -> dict[Res
     resources: dict[ResourceKey, dict[str, Any]] = {}
     for bicep_file in bicep_files:
         arm = compile_to_arm(bicep_file)
+        try:
+            bicep_text = bicep_file.read_text(encoding="utf-8")
+        except OSError:
+            bicep_text = ""
         for index, resource in enumerate(arm.get("resources", [])):
             if not isinstance(resource, dict) or "type" not in resource:
                 continue
-            identity = resource.get("name") if isinstance(resource.get("name"), str) else str(index)
+            name = resource.get("name") if isinstance(resource.get("name"), str) else None
+            identity = name if name is not None else str(index)
+            source_location.attach(
+                resource, str(bicep_file), source_location.bicep_decl_line(bicep_text, name),
+            )
             resources[(str(bicep_file), identity)] = resource
     return resources

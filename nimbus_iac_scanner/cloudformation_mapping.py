@@ -30,6 +30,8 @@ defaults `true`) -- a template genuinely missing it is malformed, and
 this module still never guesses, it omits."""
 from typing import Any, Optional
 
+from nimbus_iac_scanner import source_location
+
 ResourceKey = tuple[str, str]  # (template_file_path, logical_id)
 
 
@@ -904,7 +906,7 @@ def map_resources(all_resources: dict[ResourceKey, dict[str, Any]]) -> list[dict
         mapper = _MAPPERS.get(body.get("Type"))
         if mapper is None:
             continue
-        mapped.append(mapper(key, body))
+        mapped.append(source_location.enrich(mapper(key, body), body))
     return mapped
 
 
