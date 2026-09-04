@@ -1,0 +1,18 @@
+// Jenkins — NimbusGuard IaC scan stage.
+// Store the API key as a Jenkins 'Secret text' credential (id: nimbus-api-key).
+pipeline {
+  agent { docker { image 'python:3.12-slim' } }
+  environment { NIMBUS_API_URL = 'https://your-nimbusguard-instance/v1' }
+  stages {
+    stage('NimbusGuard IaC scan') {
+      steps {
+        withCredentials([string(credentialsId: 'nimbus-api-key', variable: 'NIMBUS_API_KEY')]) {
+          sh '''
+            pip install nimbus-iac-scanner
+            nimbus-iac-scan --path infra/ --changed-only --diff-base origin/main
+          '''
+        }
+      }
+    }
+  }
+}

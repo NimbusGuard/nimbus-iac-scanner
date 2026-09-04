@@ -1,0 +1,11 @@
+# Bitbucket Pipelines — NimbusGuard IaC scan on pull requests.
+# Set NIMBUS_API_URL and NIMBUS_API_KEY as secured repository variables.
+image: python:3.12-slim
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: NimbusGuard IaC scan
+          script:
+            - pip install nimbus-iac-scanner
+            - nimbus-iac-scan --path infra/ --changed-only --diff-base "origin/$BITBUCKET_PR_DESTINATION_BRANCH"

@@ -110,6 +110,26 @@ with `api` scope, masked, never GitLab's own predefined `$CI_JOB_TOKEN`
 (its permission to post arbitrary MR notes isn't reliable across every
 project's own settings).
 
+## Other CI providers
+
+The CLI is a plain Python package, so it runs in any CI that can execute
+a shell command. Ready-to-adapt starting templates for the most common
+ones live in [`ci/`](ci/):
+
+- [`ci/bitbucket-pipelines.yml`](ci/bitbucket-pipelines.yml) — Bitbucket Pipelines
+- [`ci/azure-pipelines.yml`](ci/azure-pipelines.yml) — Azure DevOps Pipelines
+- [`ci/circleci-config.yml`](ci/circleci-config.yml) — CircleCI (place at `.circleci/config.yml`)
+- [`ci/Jenkinsfile`](ci/Jenkinsfile) — Jenkins
+
+Set `NIMBUS_API_URL` and a secret `NIMBUS_API_KEY` (a service account with
+`view_findings`) however that provider handles secrets. These use
+`--changed-only` with the provider's own base-branch variable; drop those
+flags for a full-tree scan. Automatic PR/MR comment posting is only wired
+for GitHub Actions and GitLab CI — on other providers the CLI still runs
+and its exit code still gates the build, there's just no auto-comment.
+The platform's own IaC section also shows these snippets live
+(`GET /iac/setup-instructions`), pre-filled with your instance's API URL.
+
 ## What's covered today
 
 A deliberately curated, real slice per format — not an attempt at

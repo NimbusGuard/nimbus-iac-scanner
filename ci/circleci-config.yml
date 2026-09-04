@@ -1,0 +1,18 @@
+# CircleCI — place at .circleci/config.yml.
+# Set NIMBUS_API_URL and NIMBUS_API_KEY as project or context env vars.
+version: 2.1
+jobs:
+  iac-scan:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: NimbusGuard IaC scan
+          command: |
+            pip install nimbus-iac-scanner
+            nimbus-iac-scan --path infra/ --changed-only --diff-base "origin/$CIRCLE_BRANCH~1"
+workflows:
+  iac:
+    jobs:
+      - iac-scan

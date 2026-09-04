@@ -1,0 +1,14 @@
+# Azure DevOps Pipelines — NimbusGuard IaC scan on PRs.
+# Define NIMBUS_API_KEY as a secret pipeline variable; NIMBUS_API_URL as a plain one.
+trigger: none
+pr:
+  branches:
+    include: ['*']
+steps:
+  - script: |
+      pip install nimbus-iac-scanner
+      nimbus-iac-scan --path infra/ --changed-only --diff-base "origin/$(System.PullRequest.TargetBranch)"
+    displayName: NimbusGuard IaC scan
+    env:
+      NIMBUS_API_URL: $(NIMBUS_API_URL)
+      NIMBUS_API_KEY: $(NIMBUS_API_KEY)
