@@ -702,6 +702,110 @@ def _map_acm_certificate(key: ResourceKey, body: dict[str, Any], _all_resources)
 
 
 # ---------------------------------------------------------------------------
+# SageMaker notebook instance (NG-AWS-SAGEMAKER-001/002/003). root_access /
+# direct_internet_access are "Enabled"/"Disabled" strings (both default
+# "Enabled"); encrypted_with_kms = a kms_key_id is set.
+# ---------------------------------------------------------------------------
+
+def _map_sagemaker_notebook_instance(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "sagemaker_notebook_instance",
+        "configuration": {
+            "root_access_enabled": str(body.get("root_access", "Enabled")) == "Enabled",
+            "direct_internet_access_enabled": str(body.get("direct_internet_access", "Enabled")) == "Enabled",
+            "encrypted_with_kms": bool(body.get("kms_key_id")),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_sagemaker_notebook_instance.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# DocumentDB cluster (NG-AWS-DOCDB-001/002). storage_encrypted (default
+# false); backup_retention_period (int, default 1).
+# ---------------------------------------------------------------------------
+
+def _map_docdb_cluster(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "docdb_cluster",
+        "configuration": {
+            "storage_encrypted": bool(body.get("storage_encrypted", False)),
+            "backup_retention_period": int(body.get("backup_retention_period", 1)),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_docdb_cluster.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# WAFv2 Web ACL (NG-AWS-WAF-001/002). has_rules = at least one rule block;
+# logging_enabled correlated from a separate aws_wafv2_web_acl_logging_
+# configuration referencing this ACL (default false). CFN omits
+# logging_enabled (AWS::WAFv2::LoggingConfiguration is a separate resource,
+# no cross-resource view there).
+# ---------------------------------------------------------------------------
+
+def _waf_logging_enabled(acl_name: str, all_resources: dict[ResourceKey, dict[str, Any]]) -> bool:
+    for (resource_type, _name), lc in all_resources.items():
+        if resource_type != "aws_wafv2_web_acl_logging_configuration":
+            continue
+        ref = resolve_reference(lc.get("resource_arn"))
+        if ref is not None and ref[0] == "aws_wafv2_web_acl" and ref[1] == acl_name:
+            return True
+    return False
+
+
+def _map_waf_web_acl(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    rule = body.get("rule")
+    if isinstance(rule, list):
+        has_rules = len([r for r in rule if isinstance(r, dict)]) > 0
+    else:
+        has_rules = isinstance(rule, dict)
+    return {
+        "provider": "aws",
+        "resource_type": "waf_web_acl",
+        "configuration": {
+            "has_rules": has_rules,
+            "logging_enabled": _waf_logging_enabled(key[1], all_resources),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_wafv2_web_acl.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Athena workgroup (NG-AWS-ATHENA-001/002). results_encryption_enabled = a
+# configuration.result_configuration.encryption_configuration is present.
+# enforce_workgroup_configuration: Terraform's own attribute default is true
+# (per its provider docs), so absent == true here. (The CloudFormation
+# mapper uses the AWS API's own default of false -- a real, documented
+# divergence between the two.)
+# ---------------------------------------------------------------------------
+
+def _map_athena_workgroup(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    configuration = _first_block(body, "configuration")
+    if configuration is not None:
+        enforce = bool(configuration.get("enforce_workgroup_configuration", True))
+        result_cfg = _first_block(configuration, "result_configuration")
+        enc = result_cfg is not None and _first_block(result_cfg, "encryption_configuration") is not None
+    else:
+        enforce = True  # Terraform's documented attribute default
+        enc = False
+    return {
+        "provider": "aws",
+        "resource_type": "athena_workgroup",
+        "configuration": {
+            "results_encryption_enabled": enc,
+            "enforce_workgroup_configuration": enforce,
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_athena_workgroup.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # KMS key rotation (NG-AWS-KMS-001) -- `key_manager` is always "CUSTOMER"
 # for a Terraform-declared key (a structural fact: AWS-managed keys are
 # never created as a Terraform resource, they're implicit per-service
@@ -898,6 +1002,10 @@ _MAPPERS = {
     "aws_secretsmanager_secret": _map_secretsmanager_secret,
     "aws_acm_certificate": _map_acm_certificate,
     "aws_cloudfront_distribution": _map_cloudfront_distribution,
+    "aws_sagemaker_notebook_instance": _map_sagemaker_notebook_instance,
+    "aws_docdb_cluster": _map_docdb_cluster,
+    "aws_wafv2_web_acl": _map_waf_web_acl,
+    "aws_athena_workgroup": _map_athena_workgroup,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -915,6 +1023,7 @@ _CONSUMED_ONLY = {
     "aws_ecr_lifecycle_policy",  # merged into its repo's lifecycle_policy_enabled
     "aws_efs_backup_policy",  # merged into its file system's backup_enabled
     "aws_secretsmanager_secret_rotation",  # merged into its secret's rotation_enabled
+    "aws_wafv2_web_acl_logging_configuration",  # merged into its ACL's logging_enabled
 }
 
 

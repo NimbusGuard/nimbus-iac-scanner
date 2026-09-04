@@ -576,3 +576,90 @@ Resources:
     assert entry["configuration"] == {
         "viewer_https_enforced": False, "minimum_tls_1_2": False, "access_logging_enabled": False,
     }
+
+
+# --- sagemaker / docdb / waf / athena -------------------------------------
+
+def test_sagemaker_cfn():
+    entry = map_resources(parse_source('''
+Resources:
+  Nb:
+    Type: AWS::SageMaker::NotebookInstance
+    Properties:
+      RootAccess: Disabled
+      DirectInternetAccess: Disabled
+      KmsKeyId: arn:aws:kms:...:key/abc
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {
+        "root_access_enabled": False, "direct_internet_access_enabled": False, "encrypted_with_kms": True,
+    }
+
+
+def test_sagemaker_cfn_defaults():
+    entry = map_resources(parse_source('''
+Resources:
+  Nb:
+    Type: AWS::SageMaker::NotebookInstance
+    Properties:
+      InstanceType: ml.t2.medium
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {
+        "root_access_enabled": True, "direct_internet_access_enabled": True, "encrypted_with_kms": False,
+    }
+
+
+def test_docdb_cluster_cfn():
+    entry = map_resources(parse_source('''
+Resources:
+  C:
+    Type: AWS::DocDB::DBCluster
+    Properties:
+      StorageEncrypted: true
+      BackupRetentionPeriod: 7
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {"storage_encrypted": True, "backup_retention_period": 7}
+
+
+def test_waf_web_acl_cfn_has_rules_omits_logging():
+    entry = map_resources(parse_source('''
+Resources:
+  Acl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      Rules:
+        - Name: r1
+          Priority: 1
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {"has_rules": True}
+    assert "logging_enabled" not in entry["configuration"]
+
+
+def test_athena_workgroup_cfn_uses_api_default_enforce_false():
+    default = map_resources(parse_source('''
+Resources:
+  Wg:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: wg
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert default["configuration"] == {
+        "results_encryption_enabled": False, "enforce_workgroup_configuration": False,
+    }
+    enc = map_resources(parse_source('''
+Resources:
+  Wg:
+    Type: AWS::Athena::WorkGroup
+    Properties:
+      Name: wg
+      WorkGroupConfiguration:
+        EnforceWorkGroupConfiguration: true
+        ResultConfiguration:
+          EncryptionConfiguration:
+            EncryptionOption: SSE_KMS
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert enc["configuration"] == {
+        "results_encryption_enabled": True, "enforce_workgroup_configuration": True,
+    }

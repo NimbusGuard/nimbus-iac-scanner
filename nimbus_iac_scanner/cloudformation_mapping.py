@@ -612,6 +612,73 @@ def _map_cloudfront_distribution(key: ResourceKey, body: dict[str, Any]) -> dict
     }
 
 
+# ---------------------------------------------------------------------------
+# SageMaker / DocumentDB / WAFv2 / Athena.
+# ---------------------------------------------------------------------------
+
+def _map_sagemaker_notebook_instance(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "sagemaker_notebook_instance",
+        "configuration": {
+            "root_access_enabled": str(properties.get("RootAccess", "Enabled")) == "Enabled",
+            "direct_internet_access_enabled": str(properties.get("DirectInternetAccess", "Enabled")) == "Enabled",
+            "encrypted_with_kms": bool(properties.get("KmsKeyId")),
+        },
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::SageMaker::NotebookInstance.{key[1]}",
+    }
+
+
+def _map_docdb_cluster(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "docdb_cluster",
+        "configuration": {
+            "storage_encrypted": bool(properties.get("StorageEncrypted", False)),
+            "backup_retention_period": int(properties.get("BackupRetentionPeriod", 1)),
+        },
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::DocDB::DBCluster.{key[1]}",
+    }
+
+
+def _map_waf_web_acl(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    rules = properties.get("Rules")
+    return {
+        "provider": "aws",
+        "resource_type": "waf_web_acl",
+        # logging_enabled omitted: AWS::WAFv2::LoggingConfiguration is a
+        # separate resource, not visible to a per-resource CFN mapper.
+        "configuration": {"has_rules": isinstance(rules, list) and len(rules) > 0},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::WAFv2::WebACL.{key[1]}",
+    }
+
+
+def _map_athena_workgroup(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    wg = properties.get("WorkGroupConfiguration") or {}
+    result_cfg = wg.get("ResultConfiguration") or {}
+    enc = bool(result_cfg.get("EncryptionConfiguration"))
+    # The CreateWorkGroup API's own default is false (unlike Terraform's
+    # documented attribute default of true) -- each platform's real default.
+    enforce = bool(wg.get("EnforceWorkGroupConfiguration", False))
+    return {
+        "provider": "aws",
+        "resource_type": "athena_workgroup",
+        "configuration": {
+            "results_encryption_enabled": enc,
+            "enforce_workgroup_configuration": enforce,
+        },
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::Athena::WorkGroup.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "AWS::S3::Bucket": _map_s3_bucket,
     "AWS::EC2::SecurityGroup": _map_security_group,
@@ -636,6 +703,10 @@ _MAPPERS = {
     "AWS::SecretsManager::Secret": _map_secretsmanager_secret,
     "AWS::CertificateManager::Certificate": _map_acm_certificate,
     "AWS::CloudFront::Distribution": _map_cloudfront_distribution,
+    "AWS::SageMaker::NotebookInstance": _map_sagemaker_notebook_instance,
+    "AWS::DocDB::DBCluster": _map_docdb_cluster,
+    "AWS::WAFv2::WebACL": _map_waf_web_acl,
+    "AWS::Athena::WorkGroup": _map_athena_workgroup,
 }
 
 

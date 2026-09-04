@@ -26,18 +26,18 @@
 - [x] elasticache_cluster (3 controls)
 - [x] redshift_cluster (3 controls) -- publicly_accessible only when explicit
 - [ ] api_gateway_stage (3 controls)
-- [ ] sagemaker_notebook_instance (3 controls)
-- [ ] ebs_snapshot (2 controls)
-- [ ] rds_snapshot (2 controls)
+- [x] sagemaker_notebook_instance (3 controls)
+- [x] ebs_snapshot -- SKIPPED: encrypted is inherited/runtime, publicly_shared not IaC-expressible
+- [x] rds_snapshot -- SKIPPED: encrypted inherited/runtime, public sharing not a TF attribute
 - [x] sns_topic (2 controls) -- policy_allows_public omitted
 - [x] sqs_queue (2 controls) -- policy_allows_public omitted
 - [x] secretsmanager_secret (2 controls) -- CFN omits rotation (separate resource)
 - [x] acm_certificate (2 controls) -- days_to_expiry omitted (runtime)
-- [ ] waf_web_acl (2 controls)
-- [ ] athena_workgroup (2 controls)
+- [x] waf_web_acl (2 controls) -- CFN omits logging (separate resource)
+- [x] athena_workgroup (2 controls) -- TF/CFN enforce-default divergence documented
 - [ ] glue_data_catalog (2 controls)
-- [ ] emr_cluster (2 controls)
-- [ ] docdb_cluster (2 controls)
+- [x] emr_cluster -- SKIPPED: master_public_ip runtime/subnet-dependent, encryption via cross-resource security-config JSON
+- [x] docdb_cluster (2 controls)
 - [ ] ami (1 controls)
 - [ ] ecs_cluster (1 controls)
 - [ ] vpc (1 controls)

@@ -1088,3 +1088,99 @@ resource "aws_cloudfront_distribution" "cdn" {
     cfg = map_resources(resources)[0]["configuration"]
     assert cfg["viewer_https_enforced"] is False  # an ordered behavior is insecure
     assert cfg["minimum_tls_1_2"] is False  # TLSv1.1 < TLSv1.2
+
+
+# --- sagemaker_notebook_instance (NG-AWS-SAGEMAKER-001/002/003) ------------
+
+def test_sagemaker_hardened():
+    resources = parse_source('''
+resource "aws_sagemaker_notebook_instance" "nb" {
+  name          = "nb"
+  instance_type = "ml.t2.medium"
+  root_access             = "Disabled"
+  direct_internet_access  = "Disabled"
+  kms_key_id              = "arn:aws:kms:...:key/abc"
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "root_access_enabled": False, "direct_internet_access_enabled": False, "encrypted_with_kms": True,
+    }
+
+
+def test_sagemaker_defaults_are_the_insecure_aws_defaults():
+    resources = parse_source('''
+resource "aws_sagemaker_notebook_instance" "nb" {
+  name          = "nb"
+  instance_type = "ml.t2.medium"
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "root_access_enabled": True, "direct_internet_access_enabled": True, "encrypted_with_kms": False,
+    }
+
+
+# --- docdb_cluster (NG-AWS-DOCDB-001/002) ---------------------------------
+
+def test_docdb_cluster_explicit_and_default():
+    assert map_resources(parse_source('''
+resource "aws_docdb_cluster" "c" { storage_encrypted = true  backup_retention_period = 7 }
+'''))[0]["configuration"] == {"storage_encrypted": True, "backup_retention_period": 7}
+    assert map_resources(parse_source('resource "aws_docdb_cluster" "c" {}'))[0]["configuration"] == {
+        "storage_encrypted": False, "backup_retention_period": 1,
+    }
+
+
+# --- waf_web_acl (NG-AWS-WAF-001/002) -------------------------------------
+
+def test_waf_web_acl_with_rules_and_correlated_logging():
+    resources = parse_source('''
+resource "aws_wafv2_web_acl" "acl" {
+  name  = "acl"
+  scope = "REGIONAL"
+  default_action { allow {} }
+  rule { name = "r1" priority = 1 }
+}
+resource "aws_wafv2_web_acl_logging_configuration" "lc" {
+  resource_arn            = aws_wafv2_web_acl.acl.arn
+  log_destination_configs = ["arn:aws:logs:...:log-group:x"]
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "waf_web_acl"][0]
+    assert entry["configuration"] == {"has_rules": True, "logging_enabled": True}
+
+
+def test_waf_web_acl_no_rules_no_logging():
+    resources = parse_source('''
+resource "aws_wafv2_web_acl" "acl" {
+  name  = "acl"
+  scope = "REGIONAL"
+  default_action { allow {} }
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {"has_rules": False, "logging_enabled": False}
+
+
+# --- athena_workgroup (NG-AWS-ATHENA-001/002) -----------------------------
+
+def test_athena_workgroup_encrypted_and_enforced():
+    resources = parse_source('''
+resource "aws_athena_workgroup" "wg" {
+  name = "wg"
+  configuration {
+    enforce_workgroup_configuration = true
+    result_configuration {
+      encryption_configuration { encryption_option = "SSE_KMS" }
+    }
+  }
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "results_encryption_enabled": True, "enforce_workgroup_configuration": True,
+    }
+
+
+def test_athena_workgroup_no_config_block_uses_terraform_default_enforce_true():
+    resources = parse_source('resource "aws_athena_workgroup" "wg" { name = "wg" }')
+    assert map_resources(resources)[0]["configuration"] == {
+        "results_encryption_enabled": False, "enforce_workgroup_configuration": True,
+    }
