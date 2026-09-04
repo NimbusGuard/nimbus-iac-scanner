@@ -2183,3 +2183,27 @@ resource "azurerm_windows_virtual_machine" "vm" {
     entry = map_resources(r)[0]
     assert entry["resource_type"] == "virtual_machine"
     assert entry["configuration"]["password_authentication_disabled"] is False  # Windows uses a password
+
+
+# --- azurerm front_door (NG-AZURE-FRONTDOOR-001/003) ----------------------
+
+def test_azure_front_door_waf_and_diagnostic():
+    r = parse_source('''
+resource "azurerm_cdn_frontdoor_profile" "fd" { name = "fd" resource_group_name = "rg" sku_name = "Premium_AzureFrontDoor" }
+resource "azurerm_cdn_frontdoor_security_policy" "sp" {
+  name = "sp" cdn_frontdoor_profile_id = azurerm_cdn_frontdoor_profile.fd.id
+  security_policies { firewall { cdn_frontdoor_firewall_policy_id = "x" } }
+}
+resource "azurerm_monitor_diagnostic_setting" "ds" {
+  name = "ds" target_resource_id = azurerm_cdn_frontdoor_profile.fd.id
+  enabled_log { category = "FrontDoorAccessLog" }
+}
+''')
+    entry = [e for e in map_resources(r) if e["resource_type"] == "front_door"][0]
+    assert entry["configuration"] == {"waf_enabled": True, "diagnostic_logging_enabled": True}
+    assert "https_redirect_enforced" not in entry["configuration"]  # multi-hop, omitted
+
+
+def test_azure_front_door_defaults():
+    r = parse_source('resource "azurerm_cdn_frontdoor_profile" "fd" { name = "fd" resource_group_name = "rg" sku_name = "Standard_AzureFrontDoor" }')
+    assert map_resources(r)[0]["configuration"] == {"waf_enabled": False, "diagnostic_logging_enabled": False}

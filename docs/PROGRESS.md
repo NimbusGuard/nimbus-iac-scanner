@@ -70,7 +70,7 @@
 - [x] function_app (3 of 4) -- azurerm+Bicep(kind-branch); secrets_detected omitted (content scan)
 - [x] recovery_services_vault (4 controls) -- azurerm+Bicep
 - [x] application_gateway (3 controls) -- azurerm+Bicep; diagnostic_logging via diagnostic-setting (TF only)
-- [ ] front_door (3 controls)
+- [x] front_door (2 of 3) -- azurerm(CDN Std/Premium): waf_enabled + diagnostic (cross-resource); https_redirect_enforced omitted (multi-hop profile->endpoint->route); no Bicep (all child resources)
 - [x] service_bus_namespace (3 controls) -- azurerm+Bicep; minimum_tls omitted when absent
 - [x] redis_cache (3 controls) -- azurerm + Bicep; minimum_tls omitted when absent (version-ambiguous default)
 - [x] managed_disk (2 of 3) -- public_network_access + network_access_policy; attached omitted (runtime state)

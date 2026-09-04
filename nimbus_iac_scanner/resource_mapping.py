@@ -1493,6 +1493,38 @@ def _map_azure_windows_vm(key: ResourceKey, body: dict[str, Any], _all_resources
 
 
 # ---------------------------------------------------------------------------
+# Front Door (CDN Standard/Premium: azurerm_cdn_frontdoor_profile;
+# NG-AZURE-FRONTDOOR-001/003). Every field is cross-resource. waf_enabled =
+# a cdn_frontdoor_security_policy references this profile; diagnostic_
+# logging_enabled = a diagnostic setting on the profile. https_redirect_
+# enforced (002) needs walking profile -> endpoints -> routes (a 2-hop
+# chain) -> OMITTED (NOT_EVALUATED over an unreliable multi-hop guess). No
+# Bicep mapper: all three fields are ARM child/separate resources with no
+# cross-resource view, so a bare Microsoft.Cdn/profiles has nothing derivable.
+# ---------------------------------------------------------------------------
+
+def _map_azure_front_door(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    waf_enabled = False
+    for (resource_type, _name), sp in all_resources.items():
+        if resource_type != "azurerm_cdn_frontdoor_security_policy":
+            continue
+        ref = resolve_reference(sp.get("cdn_frontdoor_profile_id"))
+        if ref is not None and ref[0] == "azurerm_cdn_frontdoor_profile" and ref[1] == key[1]:
+            waf_enabled = True
+            break
+    return {
+        "provider": "azure",
+        "resource_type": "front_door",
+        "configuration": {
+            "waf_enabled": waf_enabled,
+            "diagnostic_logging_enabled": _diagnostic_setting_has_enabled_log("azurerm_cdn_frontdoor_profile", key[1], all_resources),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_cdn_frontdoor_profile.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -2127,6 +2159,7 @@ _MAPPERS = {
     "azurerm_storage_account": _map_azure_storage_account,
     "azurerm_linux_virtual_machine": _map_azure_linux_vm,
     "azurerm_windows_virtual_machine": _map_azure_windows_vm,
+    "azurerm_cdn_frontdoor_profile": _map_azure_front_door,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -2160,6 +2193,7 @@ _CONSUMED_ONLY = {
     "azurerm_mssql_firewall_rule",  # merged into a server's firewall_allows_all_networks
     "azurerm_network_security_rule",  # merged into an NSG's rules
     "azurerm_network_watcher_flow_log",  # merged into an NSG's flow_logs_enabled
+    "azurerm_cdn_frontdoor_security_policy",  # merged into a front door's waf_enabled
 }
 
 
