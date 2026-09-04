@@ -347,6 +347,49 @@ def _map_dynamodb_table(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any
     }
 
 
+# ---------------------------------------------------------------------------
+# EC2 instance (NG-AWS-EC2-010/011/023, the statically-knowable subset).
+# Monitoring -> detailed_monitoring_enabled; MetadataOptions ->
+# metadata_options (mapped to the snake_case http_tokens the control reads,
+# absent -> {"http_tokens":"optional"} documented default). Public IP intent
+# on AWS::EC2::Instance lives on a NetworkInterfaces entry's
+# AssociatePublicIpAddress (there's no top-level property) -> public_ip_address
+# when present, omitted otherwise. ssm_managed / secrets_detected omitted.
+# ---------------------------------------------------------------------------
+
+def _map_ec2_instance(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    configuration: dict[str, Any] = {
+        "detailed_monitoring_enabled": bool(properties.get("Monitoring", False)),
+    }
+    nics = properties.get("NetworkInterfaces")
+    if isinstance(nics, list):
+        for nic in nics:
+            if isinstance(nic, dict) and "AssociatePublicIpAddress" in nic:
+                configuration["public_ip_address"] = bool(nic.get("AssociatePublicIpAddress"))
+                break
+    meta = properties.get("MetadataOptions")
+    if isinstance(meta, dict):
+        md: dict[str, Any] = {}
+        if "HttpTokens" in meta:
+            md["http_tokens"] = meta["HttpTokens"]
+        if "HttpEndpoint" in meta:
+            md["http_endpoint"] = meta["HttpEndpoint"]
+        if "HttpPutResponseHopLimit" in meta:
+            md["http_put_response_hop_limit"] = meta["HttpPutResponseHopLimit"]
+        md.setdefault("http_tokens", "optional")
+        configuration["metadata_options"] = md
+    else:
+        configuration["metadata_options"] = {"http_tokens": "optional"}
+    return {
+        "provider": "aws",
+        "resource_type": "ec2_instance",
+        "configuration": configuration,
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::EC2::Instance.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "AWS::S3::Bucket": _map_s3_bucket,
     "AWS::EC2::SecurityGroup": _map_security_group,
@@ -359,6 +402,7 @@ _MAPPERS = {
     "AWS::ElasticLoadBalancingV2::LoadBalancer": _map_load_balancer,
     "AWS::EKS::Cluster": _map_eks_cluster,
     "AWS::DynamoDB::Table": _map_dynamodb_table,
+    "AWS::EC2::Instance": _map_ec2_instance,
 }
 
 

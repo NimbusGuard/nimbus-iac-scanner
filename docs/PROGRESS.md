@@ -16,7 +16,7 @@
 - accessanalyzer_status, azure_user, backup_account_settings, cloudwatch_metric_alarms, config_recorder, defender_settings, ec2_account_settings, emr_account_settings, entra_settings, guardduty_detector, iam_account_settings, iam_root_account, inspector_status, monitor_settings, network_settings, organizations_settings, s3_account_settings, securityhub_account
 
 ## Queue — AWS (38)
-- [ ] ec2_instance (6 controls)
+- [x] ec2_instance (6 controls) -- partial: ssm_managed/secrets_detected omitted (not knowable from IaC)
 - [ ] lambda_function (6 controls)
 - [ ] ecr_repository (4 controls)
 - [ ] cloudfront_distribution (4 controls)

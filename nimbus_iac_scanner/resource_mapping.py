@@ -286,6 +286,50 @@ def _map_eks_cluster(key: ResourceKey, body: dict[str, Any], _all_resources) -> 
 
 
 # ---------------------------------------------------------------------------
+# EC2 instance (NG-AWS-EC2-010/011/023 -- the statically-knowable subset of
+# its 6 controls). Confirmed against controls/aws/ec2/*.py:
+#  - public_ip_address: forbid_flag (truthy = FAIL). From IaC we know INTENT,
+#    not the assigned IP -- `associate_public_ip_address=true` => it will get
+#    one (emit True, a truthful flag, not a fabricated IP); `=false` => none
+#    (False); ABSENT => depends on the subnet's map_public_ip_on_launch,
+#    genuinely unknowable from the instance alone => OMITTED (NOT_EVALUATED).
+#  - metadata_options: EC2-011 reads metadata_options.http_tokens=="required".
+#    Passed through as a dict. Absent block => http_tokens defaults to
+#    "optional" per the AWS provider's own docs (a real documented default,
+#    so IMDSv1-allowed is included as data, not omitted -> EC2-011 FAILs).
+#  - detailed_monitoring_enabled: require_flag, from `monitoring` (default
+#    false).
+#  - ssm_managed (runtime registration) and secrets_detected (the Engine's
+#    own user_data scan) are NOT knowable from static IaC => OMITTED, never
+#    fabricated. Their controls read NOT_EVALUATED.
+# ---------------------------------------------------------------------------
+
+def _map_ec2_instance(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    configuration: dict[str, Any] = {
+        "detailed_monitoring_enabled": bool(body.get("monitoring", False)),
+    }
+    if "associate_public_ip_address" in body:
+        configuration["public_ip_address"] = bool(body.get("associate_public_ip_address"))
+    meta = _first_block(body, "metadata_options")
+    if meta is not None:
+        md: dict[str, Any] = {}
+        for k in ("http_tokens", "http_endpoint", "http_put_response_hop_limit"):
+            if k in meta:
+                md[k] = meta[k]
+        md.setdefault("http_tokens", "optional")  # provider default within a block
+        configuration["metadata_options"] = md
+    else:
+        configuration["metadata_options"] = {"http_tokens": "optional"}
+    return {
+        "provider": "aws",
+        "resource_type": "ec2_instance",
+        "configuration": configuration,
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_instance.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # DynamoDB table (NG-AWS-DYNAMODB-001..003). deletion_protection_enabled
 # (bool), pitr_enabled (point_in_time_recovery block), encrypted_with_cmk
 # (a server_side_encryption block that is enabled AND names a customer
@@ -499,6 +543,7 @@ _MAPPERS = {
     "aws_alb": _map_load_balancer,  # legacy alias for aws_lb (same schema)
     "aws_eks_cluster": _map_eks_cluster,
     "aws_dynamodb_table": _map_dynamodb_table,
+    "aws_instance": _map_ec2_instance,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

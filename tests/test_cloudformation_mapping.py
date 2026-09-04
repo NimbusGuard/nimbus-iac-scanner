@@ -348,3 +348,39 @@ Resources:
     assert entry["configuration"] == {
         "deletion_protection_enabled": False, "pitr_enabled": False, "encrypted_with_cmk": False,
     }
+
+
+# --- ec2_instance (NG-AWS-EC2-010/011/023) --------------------------------
+
+def test_ec2_instance_monitoring_metadata_and_nic_public_ip():
+    entry = map_resources(parse_source('''
+Resources:
+  Web:
+    Type: AWS::EC2::Instance
+    Properties:
+      Monitoring: true
+      MetadataOptions:
+        HttpTokens: required
+      NetworkInterfaces:
+        - DeviceIndex: "0"
+          AssociatePublicIpAddress: true
+''', is_yaml=True, file_key="t.yaml"))[0]
+    cfg = entry["configuration"]
+    assert cfg["detailed_monitoring_enabled"] is True
+    assert cfg["metadata_options"]["http_tokens"] == "required"
+    assert cfg["public_ip_address"] is True
+    assert entry["identifier"] == "AWS::EC2::Instance.Web"
+
+
+def test_ec2_instance_defaults_no_nic_no_metadata():
+    entry = map_resources(parse_source('''
+Resources:
+  Bare:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-1
+''', is_yaml=True, file_key="t.yaml"))[0]
+    cfg = entry["configuration"]
+    assert cfg["detailed_monitoring_enabled"] is False
+    assert cfg["metadata_options"] == {"http_tokens": "optional"}
+    assert "public_ip_address" not in cfg

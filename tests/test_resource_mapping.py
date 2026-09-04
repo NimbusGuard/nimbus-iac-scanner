@@ -737,3 +737,55 @@ resource "aws_dynamodb_table" "bare" { name = "bare" }
     assert map_resources(resources)[0]["configuration"] == {
         "deletion_protection_enabled": False, "pitr_enabled": False, "encrypted_with_cmk": False,
     }
+
+
+# --- ec2_instance (NG-AWS-EC2-010/011/023) --------------------------------
+
+def test_ec2_instance_public_ip_and_imdsv2_and_monitoring():
+    resources = parse_source('''
+resource "aws_instance" "web" {
+  ami                         = "ami-1"
+  instance_type               = "t3.micro"
+  monitoring                  = true
+  associate_public_ip_address = true
+  metadata_options {
+    http_tokens   = "required"
+    http_endpoint = "enabled"
+  }
+}
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert cfg["detailed_monitoring_enabled"] is True
+    assert cfg["public_ip_address"] is True
+    assert cfg["metadata_options"]["http_tokens"] == "required"
+    assert map_resources(resources)[0]["identifier"] == "aws_instance.web"
+
+
+def test_ec2_instance_no_public_ip_flag_and_no_metadata_block_defaults():
+    """associate_public_ip_address absent -> omitted (subnet-dependent,
+    unknowable); no metadata_options block -> http_tokens defaults 'optional'
+    (IMDSv1 allowed, a real documented default); ssm_managed/secrets_detected
+    never fabricated."""
+    resources = parse_source('''
+resource "aws_instance" "bare" {
+  ami           = "ami-1"
+  instance_type = "t3.micro"
+}
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert "public_ip_address" not in cfg
+    assert cfg["metadata_options"] == {"http_tokens": "optional"}
+    assert cfg["detailed_monitoring_enabled"] is False
+    assert "ssm_managed" not in cfg
+    assert "secrets_detected" not in cfg
+
+
+def test_ec2_instance_public_ip_explicitly_false():
+    resources = parse_source('''
+resource "aws_instance" "private" {
+  ami                         = "ami-1"
+  instance_type               = "t3.micro"
+  associate_public_ip_address = false
+}
+''')
+    assert map_resources(resources)[0]["configuration"]["public_ip_address"] is False
