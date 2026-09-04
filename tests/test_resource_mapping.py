@@ -699,3 +699,41 @@ resource "aws_eks_cluster" "other" {
 }
 ''')
     assert map_resources(resources)[0]["configuration"]["secrets_encryption_enabled"] is False
+
+
+# --- dynamodb_table (NG-AWS-DYNAMODB-001..003) ----------------------------
+
+def test_dynamodb_table_all_fields_with_cmk():
+    resources = parse_source('''
+resource "aws_dynamodb_table" "t" {
+  name                        = "orders"
+  deletion_protection_enabled = true
+  point_in_time_recovery { enabled = true }
+  server_side_encryption {
+    enabled     = true
+    kms_key_arn = "arn:aws:kms:us-east-1:1:key/abc"
+  }
+}
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert cfg == {"deletion_protection_enabled": True, "pitr_enabled": True, "encrypted_with_cmk": True}
+
+
+def test_dynamodb_table_sse_without_cmk_is_not_cmk():
+    """SSE enabled but no kms_key_arn = AWS-managed key, not a CMK."""
+    resources = parse_source('''
+resource "aws_dynamodb_table" "t" {
+  name = "t"
+  server_side_encryption { enabled = true }
+}
+''')
+    assert map_resources(resources)[0]["configuration"]["encrypted_with_cmk"] is False
+
+
+def test_dynamodb_table_defaults():
+    resources = parse_source('''
+resource "aws_dynamodb_table" "bare" { name = "bare" }
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "deletion_protection_enabled": False, "pitr_enabled": False, "encrypted_with_cmk": False,
+    }

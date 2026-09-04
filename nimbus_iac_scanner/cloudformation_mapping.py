@@ -319,6 +319,34 @@ def _map_eks_cluster(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# DynamoDB table (NG-AWS-DYNAMODB-001..003). DeletionProtectionEnabled;
+# PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled;
+# encrypted_with_cmk = SSESpecification with SSEEnabled AND a KMSMasterKeyId
+# (a customer key -- an SSE spec with no KMSMasterKeyId is the AWS-owned
+# key, not a CMK). Confirmed against the DynamoDB CMK control + AWS CFN docs.
+# ---------------------------------------------------------------------------
+
+def _map_dynamodb_table(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    pitr = properties.get("PointInTimeRecoverySpecification")
+    sse = properties.get("SSESpecification")
+    encrypted_with_cmk = bool(
+        isinstance(sse, dict) and sse.get("SSEEnabled") and sse.get("KMSMasterKeyId")
+    )
+    return {
+        "provider": "aws",
+        "resource_type": "dynamodb_table",
+        "configuration": {
+            "deletion_protection_enabled": bool(properties.get("DeletionProtectionEnabled", False)),
+            "pitr_enabled": bool(isinstance(pitr, dict) and pitr.get("PointInTimeRecoveryEnabled", False)),
+            "encrypted_with_cmk": encrypted_with_cmk,
+        },
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::DynamoDB::Table.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "AWS::S3::Bucket": _map_s3_bucket,
     "AWS::EC2::SecurityGroup": _map_security_group,
@@ -330,6 +358,7 @@ _MAPPERS = {
     "AWS::IAM::User": _map_iam_user,
     "AWS::ElasticLoadBalancingV2::LoadBalancer": _map_load_balancer,
     "AWS::EKS::Cluster": _map_eks_cluster,
+    "AWS::DynamoDB::Table": _map_dynamodb_table,
 }
 
 

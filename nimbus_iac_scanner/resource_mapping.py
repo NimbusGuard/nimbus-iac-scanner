@@ -286,6 +286,36 @@ def _map_eks_cluster(key: ResourceKey, body: dict[str, Any], _all_resources) -> 
 
 
 # ---------------------------------------------------------------------------
+# DynamoDB table (NG-AWS-DYNAMODB-001..003). deletion_protection_enabled
+# (bool), pitr_enabled (point_in_time_recovery block), encrypted_with_cmk
+# (a server_side_encryption block that is enabled AND names a customer
+# kms_key_arn -- an SSE block with no kms_key_arn is the AWS-managed key,
+# NOT a CMK; the control is specifically about a customer-managed key,
+# confirmed against controls/aws/dynamodb/ng_aws_dynamodb_003.py). All
+# defaults (deletion protection false, no PITR block -> false, no SSE
+# block -> AWS-owned key, not CMK) confirmed against the AWS provider docs.
+# ---------------------------------------------------------------------------
+
+def _map_dynamodb_table(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    pitr = _first_block(body, "point_in_time_recovery")
+    sse = _first_block(body, "server_side_encryption")
+    encrypted_with_cmk = bool(
+        sse is not None and sse.get("enabled", False) and sse.get("kms_key_arn")
+    )
+    return {
+        "provider": "aws",
+        "resource_type": "dynamodb_table",
+        "configuration": {
+            "deletion_protection_enabled": bool(body.get("deletion_protection_enabled", False)),
+            "pitr_enabled": bool(pitr is not None and pitr.get("enabled", False)),
+            "encrypted_with_cmk": encrypted_with_cmk,
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_dynamodb_table.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # KMS key rotation (NG-AWS-KMS-001) -- `key_manager` is always "CUSTOMER"
 # for a Terraform-declared key (a structural fact: AWS-managed keys are
 # never created as a Terraform resource, they're implicit per-service
@@ -468,6 +498,7 @@ _MAPPERS = {
     "aws_lb": _map_load_balancer,
     "aws_alb": _map_load_balancer,  # legacy alias for aws_lb (same schema)
     "aws_eks_cluster": _map_eks_cluster,
+    "aws_dynamodb_table": _map_dynamodb_table,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

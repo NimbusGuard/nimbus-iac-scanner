@@ -21,7 +21,7 @@
 - [ ] ecr_repository (4 controls)
 - [ ] cloudfront_distribution (4 controls)
 - [ ] iam_password_policy (3 controls)
-- [ ] dynamodb_table (3 controls)
+- [x] dynamodb_table (3 controls)
 - [ ] efs_file_system (3 controls)
 - [ ] elasticache_cluster (3 controls)
 - [ ] redshift_cluster (3 controls)

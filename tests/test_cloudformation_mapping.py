@@ -313,3 +313,38 @@ Resources:
     assert cfg["enabled_log_types"] == []
     assert cfg["secrets_encryption_enabled"] is False
     assert "version" not in cfg
+
+
+# --- dynamodb_table (NG-AWS-DYNAMODB-001..003) ----------------------------
+
+def test_dynamodb_table_all_fields_with_cmk():
+    entry = map_resources(parse_source('''
+Resources:
+  Table:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      DeletionProtectionEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+        SSEType: KMS
+        KMSMasterKeyId: arn:aws:kms:us-east-1:1:key/abc
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {
+        "deletion_protection_enabled": True, "pitr_enabled": True, "encrypted_with_cmk": True,
+    }
+
+
+def test_dynamodb_table_sse_without_key_is_not_cmk_and_defaults():
+    entry = map_resources(parse_source('''
+Resources:
+  Table:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      SSESpecification:
+        SSEEnabled: true
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {
+        "deletion_protection_enabled": False, "pitr_enabled": False, "encrypted_with_cmk": False,
+    }
