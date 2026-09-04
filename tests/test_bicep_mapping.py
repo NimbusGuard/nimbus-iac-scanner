@@ -356,3 +356,32 @@ def test_application_gateway_bicep():
 def test_application_gateway_bicep_firewall_policy():
     e = _one({"type": "Microsoft.Network/applicationGateways", "properties": {"firewallPolicy": {"id": "/x"}}})
     assert e["configuration"] == {"waf_enabled": True}
+
+
+# --- virtual_machine (Bicep) ----------------------------------------------
+
+def test_virtual_machine_bicep_hardened_linux():
+    e = _one({"type": "Microsoft.Compute/virtualMachines", "identity": {"type": "SystemAssigned"}, "properties": {
+        "storageProfile": {"osDisk": {"managedDisk": {"diskEncryptionSet": {"id": "/x"}}}},
+        "securityProfile": {"securityType": "TrustedLaunch", "encryptionAtHost": True},
+        "diagnosticsProfile": {"bootDiagnostics": {"enabled": True}},
+        "osProfile": {"linuxConfiguration": {"disablePasswordAuthentication": True, "patchSettings": {"patchMode": "AutomaticByPlatform"}}},
+    }})
+    c = e["configuration"]
+    assert c == {
+        "uses_managed_disks": True, "disks_encrypted_with_cmk": True, "trusted_launch_enabled": True,
+        "platform_patching_enabled": True, "boot_diagnostics_enabled": True, "managed_identity_enabled": True,
+        "encryption_at_host_enabled": True, "password_authentication_disabled": True,
+    }
+
+
+def test_virtual_machine_bicep_windows_defaults():
+    e = _one({"type": "Microsoft.Compute/virtualMachines", "properties": {
+        "storageProfile": {"osDisk": {"managedDisk": {}}},
+        "osProfile": {"windowsConfiguration": {}},
+    }})
+    c = e["configuration"]
+    assert c["uses_managed_disks"] is True
+    assert c["disks_encrypted_with_cmk"] is False
+    assert c["password_authentication_disabled"] is False
+    assert c["trusted_launch_enabled"] is False

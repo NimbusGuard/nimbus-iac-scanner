@@ -58,7 +58,7 @@
 ## Queue — Azure (30, via Terraform azurerm_* + Bicep)
 - [x] network_security_group (16 controls) -- azurerm rules+flow_logs (Bicep rules-only already existed); custom rule-matching like security_group
 - [x] storage_account (14 controls) -- azurerm full + Bicep expanded; blob soft-delete/versioning + diagnostic are TF-only (ARM child resources)
-- [ ] virtual_machine (13 controls)
+- [x] virtual_machine (8 of 13) -- azurerm(linux/windows)+Bicep; public_ip/backup/guest-diag/guest-config omitted (cross-resource)
 - [x] sql_server (10 controls) -- azurerm (5 inline + 5 cross-resource children); Bicep inline-only (children are ARM sub-resources)
 - [x] aks_cluster (7 controls) -- azurerm+Bicep; control_plane_logging via diagnostic-setting (TF only)
 - [x] app_service (6 of 7) -- azurerm(linux/windows/legacy)+Bicep; secrets_detected omitted (content scan)

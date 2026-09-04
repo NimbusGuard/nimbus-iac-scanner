@@ -1450,6 +1450,49 @@ def _map_azure_storage_account(key: ResourceKey, body: dict[str, Any], all_resou
 
 
 # ---------------------------------------------------------------------------
+# Virtual Machine (NG-AZURE-VM-001/002/004/005/007/008/009/012). Inline:
+# uses_managed_disks (always true for the modern azurerm_*_virtual_machine
+# resources), disks_encrypted_with_cmk (os_disk.disk_encryption_set_id),
+# trusted_launch_enabled (secure_boot_enabled OR vtpm_enabled ->
+# security_type TrustedLaunch), platform_patching_enabled (patch_mode
+# AutomaticByPlatform), boot_diagnostics_enabled (a boot_diagnostics block),
+# managed_identity_enabled (an identity block), encryption_at_host_enabled
+# (default false), password_authentication_disabled (Linux disable_password_
+# authentication, default true; Windows always uses a password -> false).
+# OMITTED (cross-resource, not derivable): public_ip_attached (003/013 -- a
+# NIC->public-IP hop), backup_protected (006), guest_diagnostics_enabled
+# (010), guest_configuration_enabled (011) -- all separate resources.
+# ---------------------------------------------------------------------------
+
+def _map_azure_vm(key: ResourceKey, body: dict[str, Any], is_linux: bool, tf_type: str) -> dict[str, Any]:
+    os_disk = _first_block(body, "os_disk")
+    return {
+        "provider": "azure",
+        "resource_type": "virtual_machine",
+        "configuration": {
+            "uses_managed_disks": True,
+            "disks_encrypted_with_cmk": os_disk is not None and bool(os_disk.get("disk_encryption_set_id")),
+            "trusted_launch_enabled": bool(body.get("secure_boot_enabled", False)) or bool(body.get("vtpm_enabled", False)),
+            "platform_patching_enabled": str(body.get("patch_mode") or "") == "AutomaticByPlatform",
+            "boot_diagnostics_enabled": _first_block(body, "boot_diagnostics") is not None,
+            "managed_identity_enabled": _first_block(body, "identity") is not None,
+            "encryption_at_host_enabled": bool(body.get("encryption_at_host_enabled", False)),
+            "password_authentication_disabled": bool(body.get("disable_password_authentication", True)) if is_linux else False,
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"{tf_type}.{key[1]}",
+    }
+
+
+def _map_azure_linux_vm(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return _map_azure_vm(key, body, True, "azurerm_linux_virtual_machine")
+
+
+def _map_azure_windows_vm(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return _map_azure_vm(key, body, False, "azurerm_windows_virtual_machine")
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -2082,6 +2125,8 @@ _MAPPERS = {
     "azurerm_application_gateway": _map_azure_application_gateway,
     "azurerm_network_security_group": _map_azure_network_security_group,
     "azurerm_storage_account": _map_azure_storage_account,
+    "azurerm_linux_virtual_machine": _map_azure_linux_vm,
+    "azurerm_windows_virtual_machine": _map_azure_windows_vm,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

@@ -2125,3 +2125,61 @@ resource "azurerm_storage_account" "sa" {
     assert c["account_replication_type"] == "LRS"
     assert "minimum_tls_version" not in c  # omitted when absent
     assert "cross_tenant_replication_enabled" not in c  # omitted when absent
+
+
+# --- azurerm virtual_machine (NG-AZURE-VM-*) ------------------------------
+
+def test_azure_linux_vm_hardened():
+    r = parse_source('''
+resource "azurerm_linux_virtual_machine" "vm" {
+  name = "vm" resource_group_name = "rg" location = "e" size = "Standard_B1s"
+  admin_username = "a" network_interface_ids = ["x"]
+  disable_password_authentication = true
+  secure_boot_enabled             = true
+  vtpm_enabled                    = true
+  patch_mode                      = "AutomaticByPlatform"
+  encryption_at_host_enabled      = true
+  identity { type = "SystemAssigned" }
+  boot_diagnostics {}
+  os_disk { caching = "ReadWrite" storage_account_type = "Premium_LRS" disk_encryption_set_id = "/subscriptions/s/x" }
+}
+''')
+    c = map_resources(r)[0]["configuration"]
+    assert c == {
+        "uses_managed_disks": True, "disks_encrypted_with_cmk": True, "trusted_launch_enabled": True,
+        "platform_patching_enabled": True, "boot_diagnostics_enabled": True, "managed_identity_enabled": True,
+        "encryption_at_host_enabled": True, "password_authentication_disabled": True,
+    }
+    assert "public_ip_attached" not in c  # cross-resource, omitted
+
+
+def test_azure_linux_vm_insecure_defaults():
+    r = parse_source('''
+resource "azurerm_linux_virtual_machine" "vm" {
+  name = "vm" resource_group_name = "rg" location = "e" size = "Standard_B1s"
+  admin_username = "a" network_interface_ids = ["x"]
+  os_disk { caching = "ReadWrite" storage_account_type = "Standard_LRS" }
+}
+''')
+    c = map_resources(r)[0]["configuration"]
+    assert c["uses_managed_disks"] is True
+    assert c["disks_encrypted_with_cmk"] is False
+    assert c["trusted_launch_enabled"] is False
+    assert c["platform_patching_enabled"] is False
+    assert c["boot_diagnostics_enabled"] is False
+    assert c["managed_identity_enabled"] is False
+    assert c["encryption_at_host_enabled"] is False
+    assert c["password_authentication_disabled"] is True  # Linux default
+
+
+def test_azure_windows_vm_password_auth_always_false():
+    r = parse_source('''
+resource "azurerm_windows_virtual_machine" "vm" {
+  name = "vm" resource_group_name = "rg" location = "e" size = "Standard_B1s"
+  admin_username = "a" admin_password = "p" network_interface_ids = ["x"]
+  os_disk { caching = "ReadWrite" storage_account_type = "Standard_LRS" }
+}
+''')
+    entry = map_resources(r)[0]
+    assert entry["resource_type"] == "virtual_machine"
+    assert entry["configuration"]["password_authentication_disabled"] is False  # Windows uses a password

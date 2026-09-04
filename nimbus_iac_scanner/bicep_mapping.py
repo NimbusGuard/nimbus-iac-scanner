@@ -389,6 +389,36 @@ def _map_application_gateway(key: tuple[str, str], resource: dict[str, Any]) -> 
             "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Network/applicationGateways.{key[1]}"}
 
 
+def _map_virtual_machine(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    """Microsoft.Compute/virtualMachines (NG-AZURE-VM-001/002/004/005/007/008/
+    009/012), inline fields only. public_ip/backup/guest extensions are
+    separate resources -> omitted (matching the Terraform mapper)."""
+    p = resource.get("properties") or {}
+    storage = p.get("storageProfile") or {}
+    os_disk = storage.get("osDisk") or {}
+    managed = os_disk.get("managedDisk")
+    managed_dict = managed if isinstance(managed, dict) else {}
+    security = p.get("securityProfile") or {}
+    uefi = security.get("uefiSettings") or {}
+    diag = (p.get("diagnosticsProfile") or {}).get("bootDiagnostics") or {}
+    os_profile = p.get("osProfile") or {}
+    linux = os_profile.get("linuxConfiguration")
+    identity = resource.get("identity") or {}
+    is_linux = linux is not None
+    patch = (linux or os_profile.get("windowsConfiguration") or {}).get("patchSettings") or {}
+    trusted = str(security.get("securityType") or "") == "TrustedLaunch" or bool(uefi.get("secureBootEnabled", False)) or bool(uefi.get("vTpmEnabled", False))
+    return {"provider": "azure", "resource_type": "virtual_machine", "configuration": {
+        "uses_managed_disks": managed is not None,
+        "disks_encrypted_with_cmk": bool(managed_dict.get("diskEncryptionSet")),
+        "trusted_launch_enabled": trusted,
+        "platform_patching_enabled": str(patch.get("patchMode") or "") == "AutomaticByPlatform",
+        "boot_diagnostics_enabled": bool(diag.get("enabled", False)),
+        "managed_identity_enabled": bool(identity.get("type") and str(identity.get("type")).lower() != "none"),
+        "encryption_at_host_enabled": bool(security.get("encryptionAtHost", False)),
+        "password_authentication_disabled": bool((linux or {}).get("disablePasswordAuthentication", False)) if is_linux else False,
+    }, "tags": resource.get("tags") or {}, "identifier": f"Microsoft.Compute/virtualMachines.{key[1]}"}
+
+
 _MAPPERS = {
     "Microsoft.Network/networkSecurityGroups": _map_network_security_group,
     "Microsoft.Storage/storageAccounts": _map_storage_account,
@@ -414,6 +444,7 @@ _MAPPERS = {
     "Microsoft.ContainerService/managedClusters": _map_aks_cluster,
     "Microsoft.RecoveryServices/vaults": _map_recovery_services_vault,
     "Microsoft.Network/applicationGateways": _map_application_gateway,
+    "Microsoft.Compute/virtualMachines": _map_virtual_machine,
 }
 
 
