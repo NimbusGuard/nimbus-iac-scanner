@@ -1702,3 +1702,59 @@ def test_azure_log_analytics_retention_omitted_when_absent():
 resource "azurerm_log_analytics_workspace" "la" { name = "la" retention_in_days = 90 }
 '''))[0]["configuration"] == {"retention_days": 90}
     assert map_resources(parse_source('resource "azurerm_log_analytics_workspace" "la" { name = "la" }'))[0]["configuration"] == {}
+
+
+# --- azurerm container_registry / api_management / key_vault_key & secret --
+
+def test_azure_container_registry_hardened():
+    r = parse_source('''
+resource "azurerm_container_registry" "acr" {
+  name = "acr" sku = "Premium"
+  admin_enabled                 = false
+  public_network_access_enabled = false
+  anonymous_pull_enabled        = false
+  retention_policy_in_days      = 30
+  encryption { key_vault_key_id = "https://kv.vault.azure.net/keys/k" }
+}
+''')
+    assert map_resources(r)[0]["configuration"] == {
+        "admin_user_enabled": False, "public_network_access_enabled": False,
+        "anonymous_pull_enabled": False, "encrypted_with_cmk": True, "retention_policy_enabled": True,
+    }
+
+
+def test_azure_container_registry_insecure_defaults():
+    r = parse_source('resource "azurerm_container_registry" "acr" { name = "acr" sku = "Basic" }')
+    assert map_resources(r)[0]["configuration"] == {
+        "admin_user_enabled": False, "public_network_access_enabled": True,
+        "anonymous_pull_enabled": False, "encrypted_with_cmk": False, "retention_policy_enabled": False,
+    }
+
+
+def test_azure_api_management_public_default_true():
+    assert map_resources(parse_source('resource "azurerm_api_management" "a" { name = "a" }'))[0]["configuration"] == {"public_network_access_enabled": True}
+    r = parse_source('resource "azurerm_api_management" "a" { name = "a" public_network_access_enabled = false }')
+    assert map_resources(r)[0]["configuration"] == {"public_network_access_enabled": False}
+
+
+def test_azure_key_vault_key_expiration_and_rotation():
+    r = parse_source('''
+resource "azurerm_key_vault_key" "k" {
+  name = "k" key_vault_id = "x" key_type = "RSA" key_size = 2048 key_opts = ["sign"]
+  expiration_date = "2027-01-01T00:00:00Z"
+  rotation_policy { automatic { time_before_expiry = "P30D" } }
+}
+''')
+    assert map_resources(r)[0]["configuration"] == {"expiration_set": True, "rotation_policy": True}
+
+
+def test_azure_key_vault_key_defaults():
+    r = parse_source('resource "azurerm_key_vault_key" "k" { name = "k" key_vault_id = "x" key_type = "RSA" key_size = 2048 key_opts = ["sign"] }')
+    assert map_resources(r)[0]["configuration"] == {"expiration_set": False, "rotation_policy": False}
+
+
+def test_azure_key_vault_secret_expiration():
+    assert map_resources(parse_source('''
+resource "azurerm_key_vault_secret" "s" { name = "s" value = "x" key_vault_id = "x" expiration_date = "2027-01-01T00:00:00Z" }
+'''))[0]["configuration"] == {"expiration_set": True}
+    assert map_resources(parse_source('resource "azurerm_key_vault_secret" "s" { name = "s" value = "x" key_vault_id = "x" }'))[0]["configuration"] == {"expiration_set": False}

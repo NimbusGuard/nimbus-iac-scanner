@@ -208,6 +208,43 @@ def _map_log_analytics_workspace(key: tuple[str, str], resource: dict[str, Any])
             "tags": resource.get("tags") or {}, "identifier": f"Microsoft.OperationalInsights/workspaces.{key[1]}"}
 
 
+def _map_container_registry(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    enc = p.get("encryption") or {}
+    policies = p.get("policies") or {}
+    retention = policies.get("retentionPolicy") or {}
+    return {"provider": "azure", "resource_type": "container_registry", "configuration": {
+        "admin_user_enabled": bool(p.get("adminUserEnabled", False)),
+        "public_network_access_enabled": str(p.get("publicNetworkAccess", "Enabled")).lower() != "disabled",
+        "anonymous_pull_enabled": bool(p.get("anonymousPullEnabled", False)),
+        "encrypted_with_cmk": str(enc.get("status") or "").lower() == "enabled",
+        "retention_policy_enabled": str(retention.get("status") or "").lower() == "enabled",
+    }, "tags": resource.get("tags") or {}, "identifier": f"Microsoft.ContainerRegistry/registries.{key[1]}"}
+
+
+def _map_api_management(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    pna = p.get("publicNetworkAccess")
+    return {"provider": "azure", "resource_type": "api_management", "configuration": {
+        "public_network_access_enabled": True if pna is None else str(pna).lower() != "disabled",
+    }, "tags": resource.get("tags") or {}, "identifier": f"Microsoft.ApiManagement/service.{key[1]}"}
+
+
+def _map_key_vault_key(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    return {"provider": "azure", "resource_type": "key_vault_key", "configuration": {
+        "expiration_set": p.get("attributes", {}).get("exp") is not None,
+        "rotation_policy": p.get("rotationPolicy") is not None,
+    }, "tags": resource.get("tags") or {}, "identifier": f"Microsoft.KeyVault/vaults/keys.{key[1]}"}
+
+
+def _map_key_vault_secret(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    p = resource.get("properties") or {}
+    return {"provider": "azure", "resource_type": "key_vault_secret", "configuration": {
+        "expiration_set": p.get("attributes", {}).get("exp") is not None,
+    }, "tags": resource.get("tags") or {}, "identifier": f"Microsoft.KeyVault/vaults/secrets.{key[1]}"}
+
+
 _MAPPERS = {
     "Microsoft.Network/networkSecurityGroups": _map_network_security_group,
     "Microsoft.Storage/storageAccounts": _map_storage_account,
@@ -221,6 +258,10 @@ _MAPPERS = {
     "Microsoft.Automation/automationAccounts": _map_automation_account,
     "Microsoft.Synapse/workspaces": _map_synapse_workspace,
     "Microsoft.OperationalInsights/workspaces": _map_log_analytics_workspace,
+    "Microsoft.ContainerRegistry/registries": _map_container_registry,
+    "Microsoft.ApiManagement/service": _map_api_management,
+    "Microsoft.KeyVault/vaults/keys": _map_key_vault_key,
+    "Microsoft.KeyVault/vaults/secrets": _map_key_vault_secret,
 }
 
 

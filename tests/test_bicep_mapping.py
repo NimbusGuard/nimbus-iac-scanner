@@ -181,3 +181,38 @@ def test_synapse_bicep_default():
 def test_log_analytics_bicep():
     assert _one({"type": "Microsoft.OperationalInsights/workspaces", "properties": {"retentionInDays": 90}})["configuration"] == {"retention_days": 90}
     assert _one({"type": "Microsoft.OperationalInsights/workspaces", "properties": {}})["configuration"] == {}
+
+
+# --- container_registry / api_management / key_vault key & secret (Bicep) --
+
+def test_container_registry_bicep():
+    e = _one({"type": "Microsoft.ContainerRegistry/registries", "properties": {
+        "adminUserEnabled": False, "publicNetworkAccess": "Disabled", "anonymousPullEnabled": False,
+        "encryption": {"status": "enabled"}, "policies": {"retentionPolicy": {"status": "enabled"}},
+    }})
+    assert e["configuration"] == {
+        "admin_user_enabled": False, "public_network_access_enabled": False,
+        "anonymous_pull_enabled": False, "encrypted_with_cmk": True, "retention_policy_enabled": True,
+    }
+
+
+def test_container_registry_bicep_defaults():
+    e = _one({"type": "Microsoft.ContainerRegistry/registries", "properties": {}})
+    assert e["configuration"] == {
+        "admin_user_enabled": False, "public_network_access_enabled": True,
+        "anonymous_pull_enabled": False, "encrypted_with_cmk": False, "retention_policy_enabled": False,
+    }
+
+
+def test_api_management_bicep_default():
+    assert _one({"type": "Microsoft.ApiManagement/service", "properties": {}})["configuration"] == {"public_network_access_enabled": True}
+
+
+def test_key_vault_key_bicep():
+    e = _one({"type": "Microsoft.KeyVault/vaults/keys", "properties": {"attributes": {"exp": 1893456000}, "rotationPolicy": {}}})
+    assert e["configuration"] == {"expiration_set": True, "rotation_policy": True}
+
+
+def test_key_vault_secret_bicep():
+    assert _one({"type": "Microsoft.KeyVault/vaults/secrets", "properties": {"attributes": {"exp": 1893456000}}})["configuration"] == {"expiration_set": True}
+    assert _one({"type": "Microsoft.KeyVault/vaults/secrets", "properties": {}})["configuration"] == {"expiration_set": False}

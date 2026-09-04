@@ -63,7 +63,7 @@
 - [ ] aks_cluster (7 controls)
 - [ ] app_service (7 controls)
 - [x] key_vault (5 of 6 controls) -- azurerm + Bicep; access_policies (custom) omitted; logging via diagnostic-setting (TF only)
-- [ ] container_registry (5 controls)
+- [x] container_registry (5 controls) -- azurerm+Bicep
 - [x] postgresql_server (4 controls) -- azurerm(flexible)+Bicep; ssl via require_secure_transport config (default ON)
 - [x] mysql_server (4 controls) -- azurerm(flexible)+Bicep; ssl via require_secure_transport config (default ON)
 - [x] cosmosdb_account (4 controls) -- azurerm + Bicep
@@ -74,15 +74,15 @@
 - [x] service_bus_namespace (3 controls) -- azurerm+Bicep; minimum_tls omitted when absent
 - [x] redis_cache (3 controls) -- azurerm + Bicep; minimum_tls omitted when absent (version-ambiguous default)
 - [ ] managed_disk (3 controls)
-- [ ] key_vault_key (2 controls)
+- [x] key_vault_key (2 controls) -- azurerm+Bicep
 - [x] event_hub_namespace (2 controls) -- azurerm+Bicep
 - [x] automation_account (2 controls) -- azurerm+Bicep
 - [ ] sql_database (2 controls)
-- [ ] api_management (2 controls)
+- [x] api_management (1 of 2) -- public_network only; minimum_tls omitted (custom_properties mechanism)
 - [ ] managed_identity (1 controls)
 - [x] log_analytics_workspace (1 control) -- azurerm+Bicep; retention omitted when absent (no documented default)
 - [x] subnet (1 control)
-- [ ] key_vault_secret (1 controls)
+- [x] key_vault_secret (1 control) -- azurerm+Bicep
 - [ ] storage_container (1 controls)
 - [x] synapse_workspace (1 control) -- azurerm+Bicep
 - [ ] * (1 controls)

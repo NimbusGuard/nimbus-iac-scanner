@@ -1042,6 +1042,81 @@ def _map_azure_log_analytics_workspace(key: ResourceKey, body: dict[str, Any], _
 
 
 # ---------------------------------------------------------------------------
+# Container Registry (NG-AZURE-ACR-001..005). admin_enabled/anonymous_pull
+# default false; public_network_access_enabled default true; CMK = an
+# encryption block with a key_vault_key_id (or enabled=true); retention =
+# retention_policy_in_days set (or a legacy retention_policy block enabled).
+# ---------------------------------------------------------------------------
+
+def _map_azure_container_registry(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    enc = _first_block(body, "encryption")
+    cmk = enc is not None and (bool(enc.get("key_vault_key_id")) or bool(enc.get("enabled", False)))
+    retention = "retention_policy_in_days" in body
+    if not retention:
+        rp = _first_block(body, "retention_policy")
+        retention = rp is not None and bool(rp.get("enabled", False))
+    return {
+        "provider": "azure",
+        "resource_type": "container_registry",
+        "configuration": {
+            "admin_user_enabled": bool(body.get("admin_enabled", False)),
+            "public_network_access_enabled": bool(body.get("public_network_access_enabled", True)),
+            "anonymous_pull_enabled": bool(body.get("anonymous_pull_enabled", False)),
+            "encrypted_with_cmk": cmk,
+            "retention_policy_enabled": retention,
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_container_registry.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# API Management (NG-AZURE-APIMANAGEMENT-002). public_network_access_enabled
+# default true. minimum_tls_1_2 (001) is OMITTED -- APIM controls TLS via a
+# custom_properties dict of stringified protocol toggles, a nuanced/version-
+# specific mechanism not reliably derivable from azurerm here.
+# ---------------------------------------------------------------------------
+
+def _map_azure_api_management(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "azure",
+        "resource_type": "api_management",
+        "configuration": {"public_network_access_enabled": bool(body.get("public_network_access_enabled", True))},
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_api_management.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Key Vault key / secret (NG-AZURE-KEYVAULT-001/006/009). expiration_set =
+# an expiration_date is set. rotation_policy (custom) = a rotation_policy
+# block is present on the key.
+# ---------------------------------------------------------------------------
+
+def _map_azure_key_vault_key(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "azure",
+        "resource_type": "key_vault_key",
+        "configuration": {
+            "expiration_set": bool(body.get("expiration_date")),
+            "rotation_policy": _first_block(body, "rotation_policy") is not None,
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_key_vault_key.{key[1]}",
+    }
+
+
+def _map_azure_key_vault_secret(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "azure",
+        "resource_type": "key_vault_secret",
+        "configuration": {"expiration_set": bool(body.get("expiration_date"))},
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_key_vault_secret.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -1655,6 +1730,10 @@ _MAPPERS = {
     "azurerm_automation_account": _map_azure_automation_account,
     "azurerm_synapse_workspace": _map_azure_synapse_workspace,
     "azurerm_log_analytics_workspace": _map_azure_log_analytics_workspace,
+    "azurerm_container_registry": _map_azure_container_registry,
+    "azurerm_api_management": _map_azure_api_management,
+    "azurerm_key_vault_key": _map_azure_key_vault_key,
+    "azurerm_key_vault_secret": _map_azure_key_vault_secret,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
