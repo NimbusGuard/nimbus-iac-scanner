@@ -50,16 +50,38 @@ def _map_network_security_group(key: tuple[str, str], resource: dict[str, Any]) 
 
 
 def _map_storage_account(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    """Microsoft.Storage/storageAccounts (NG-AZURE-STORAGE-001..011/013..015).
+    Inline fields; blob soft-delete/versioning and diagnostic logging are ARM
+    child resources (blobServices / diagnosticSettings) with no cross-resource
+    view here -> omitted (the Terraform mapper covers those). account_
+    replication_type is the sku.name suffix (e.g. Standard_LRS -> LRS)."""
     properties = resource.get("properties") or {}
+    encryption = properties.get("encryption") or {}
+    net = properties.get("networkAcls") or {}
+    sas = properties.get("sasPolicy") or {}
+    sku_name = (resource.get("sku") or {}).get("name") or ""
+    configuration: dict[str, Any] = {
+        # "the default interpretation is false for this property" -- Microsoft's
+        # own current ARM reference, confirmed live, not guessed.
+        "allow_blob_public_access": bool(properties.get("allowBlobPublicAccess", False)),
+        "supports_https_traffic_only": bool(properties.get("supportsHttpsTrafficOnly", True)),
+        "infrastructure_encryption_enabled": bool(encryption.get("requireInfrastructureEncryption", False)),
+        "shared_key_access_disabled": not bool(properties.get("allowSharedKeyAccess", True)),
+        "public_network_access_enabled": str(properties.get("publicNetworkAccess", "Enabled")).lower() != "disabled",
+        "sas_expiration_policy_set": bool(sas.get("sasExpirationPeriod")),
+        "encryption": {"services": {"blob": {"enabled": True}}},
+        "network_default_action": str(net.get("defaultAction") or "Allow"),
+    }
+    if "_" in sku_name:
+        configuration["account_replication_type"] = sku_name.split("_", 1)[1]
+    if "minimumTlsVersion" in properties:
+        configuration["minimum_tls_version"] = str(properties["minimumTlsVersion"])
+    if "allowCrossTenantReplication" in properties:
+        configuration["cross_tenant_replication_enabled"] = bool(properties["allowCrossTenantReplication"])
     return {
         "provider": "azure",
         "resource_type": "storage_account",
-        "configuration": {
-            # "the default interpretation is false for this property" --
-            # Microsoft's own current ARM template reference for
-            # Microsoft.Storage/storageAccounts, confirmed live, not guessed.
-            "allow_blob_public_access": bool(properties.get("allowBlobPublicAccess", False)),
-        },
+        "configuration": configuration,
         "tags": resource.get("tags") or {},
         "identifier": f"Microsoft.Storage/storageAccounts.{key[1]}",
     }

@@ -1405,6 +1405,51 @@ def _map_azure_network_security_group(key: ResourceKey, body: dict[str, Any], al
 
 
 # ---------------------------------------------------------------------------
+# Storage account (NG-AZURE-STORAGE-001..015, minus 012 which targets
+# storage_container). encryption is always {services.blob.enabled: true} --
+# a modern ARM storage account cannot disable blob encryption (a confirmed
+# structural fact, matching the collector). blob_soft_delete/versioning come
+# from the blob_properties block; network_default_action from network_rules
+# (default "Allow"); sas_expiration from a sas_policy block; diagnostic from
+# a diagnostic setting. minimum_tls_version and cross_tenant_replication_
+# enabled are omitted when absent (version-ambiguous defaults). Bicep covers
+# the inline fields; blob soft-delete/versioning and diagnostics are ARM
+# child resources -> omitted there.
+# ---------------------------------------------------------------------------
+
+def _map_azure_storage_account(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    blob = _first_block(body, "blob_properties")
+    net = _first_block(body, "network_rules")
+    sas = _first_block(body, "sas_policy")
+    configuration: dict[str, Any] = {
+        "allow_blob_public_access": bool(body.get("allow_nested_items_to_be_public", True)),
+        "supports_https_traffic_only": bool(body.get("https_traffic_only_enabled", body.get("enable_https_traffic_only", True))),
+        "infrastructure_encryption_enabled": bool(body.get("infrastructure_encryption_enabled", False)),
+        "shared_key_access_disabled": not bool(body.get("shared_access_key_enabled", True)),
+        "public_network_access_enabled": bool(body.get("public_network_access_enabled", True)),
+        "sas_expiration_policy_set": sas is not None,
+        "encryption": {"services": {"blob": {"enabled": True}}},
+        "blob_soft_delete_enabled": blob is not None and _first_block(blob, "delete_retention_policy") is not None,
+        "blob_versioning_enabled": bool(blob.get("versioning_enabled", False)) if blob is not None else False,
+        "network_default_action": str((net or {}).get("default_action") or "Allow"),
+        "diagnostic_logging_enabled": _diagnostic_setting_has_enabled_log("azurerm_storage_account", key[1], all_resources),
+    }
+    if body.get("account_replication_type") is not None:
+        configuration["account_replication_type"] = str(body["account_replication_type"])
+    if "min_tls_version" in body:
+        configuration["minimum_tls_version"] = str(body["min_tls_version"])
+    if "cross_tenant_replication_enabled" in body:
+        configuration["cross_tenant_replication_enabled"] = bool(body["cross_tenant_replication_enabled"])
+    return {
+        "provider": "azure",
+        "resource_type": "storage_account",
+        "configuration": configuration,
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_storage_account.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -2036,6 +2081,7 @@ _MAPPERS = {
     "azurerm_recovery_services_vault": _map_azure_recovery_services_vault,
     "azurerm_application_gateway": _map_azure_application_gateway,
     "azurerm_network_security_group": _map_azure_network_security_group,
+    "azurerm_storage_account": _map_azure_storage_account,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

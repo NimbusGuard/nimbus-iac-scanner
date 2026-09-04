@@ -2058,3 +2058,70 @@ resource "azurerm_network_security_rule" "r" {
 def test_azure_nsg_empty():
     r = parse_source('resource "azurerm_network_security_group" "nsg" { name = "nsg" location = "e" resource_group_name = "rg" }')
     assert map_resources(r)[0]["configuration"] == {"rules": [], "flow_logs_enabled": False}
+
+
+# --- azurerm storage_account (NG-AZURE-STORAGE-*) -------------------------
+
+def test_azure_storage_account_hardened():
+    r = parse_source('''
+resource "azurerm_storage_account" "sa" {
+  name = "sa" resource_group_name = "rg" location = "e"
+  account_tier = "Standard" account_replication_type = "GRS"
+  allow_nested_items_to_be_public = false
+  https_traffic_only_enabled      = true
+  min_tls_version                 = "TLS1_2"
+  infrastructure_encryption_enabled = true
+  shared_access_key_enabled       = false
+  public_network_access_enabled   = false
+  cross_tenant_replication_enabled = false
+  network_rules { default_action = "Deny" }
+  sas_policy { expiration_period = "01.00:00:00" }
+  blob_properties {
+    versioning_enabled = true
+    delete_retention_policy { days = 7 }
+  }
+}
+resource "azurerm_monitor_diagnostic_setting" "ds" {
+  name = "ds" target_resource_id = azurerm_storage_account.sa.id
+  enabled_log { category = "StorageRead" }
+}
+''')
+    entry = [e for e in map_resources(r) if e["resource_type"] == "storage_account"][0]
+    c = entry["configuration"]
+    assert c["allow_blob_public_access"] is False
+    assert c["supports_https_traffic_only"] is True
+    assert c["minimum_tls_version"] == "TLS1_2"
+    assert c["infrastructure_encryption_enabled"] is True
+    assert c["shared_key_access_disabled"] is True
+    assert c["public_network_access_enabled"] is False
+    assert c["cross_tenant_replication_enabled"] is False
+    assert c["network_default_action"] == "Deny"
+    assert c["sas_expiration_policy_set"] is True
+    assert c["blob_soft_delete_enabled"] is True
+    assert c["blob_versioning_enabled"] is True
+    assert c["account_replication_type"] == "GRS"
+    assert c["diagnostic_logging_enabled"] is True
+    assert c["encryption"] == {"services": {"blob": {"enabled": True}}}
+
+
+def test_azure_storage_account_insecure_defaults():
+    r = parse_source('''
+resource "azurerm_storage_account" "sa" {
+  name = "sa" resource_group_name = "rg" location = "e"
+  account_tier = "Standard" account_replication_type = "LRS"
+}
+''')
+    c = map_resources(r)[0]["configuration"]
+    assert c["allow_blob_public_access"] is True
+    assert c["supports_https_traffic_only"] is True  # default true
+    assert c["infrastructure_encryption_enabled"] is False
+    assert c["shared_key_access_disabled"] is False  # shared key allowed by default
+    assert c["public_network_access_enabled"] is True
+    assert c["sas_expiration_policy_set"] is False
+    assert c["blob_soft_delete_enabled"] is False
+    assert c["blob_versioning_enabled"] is False
+    assert c["network_default_action"] == "Allow"
+    assert c["diagnostic_logging_enabled"] is False
+    assert c["account_replication_type"] == "LRS"
+    assert "minimum_tls_version" not in c  # omitted when absent
+    assert "cross_tenant_replication_enabled" not in c  # omitted when absent

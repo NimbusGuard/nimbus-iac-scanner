@@ -53,6 +53,32 @@ def test_storage_account_allow_blob_public_access_defaults_false_when_absent():
     assert entry["configuration"]["allow_blob_public_access"] is False
 
 
+def test_storage_account_bicep_full_field_set():
+    entry = _one({
+        "type": "Microsoft.Storage/storageAccounts",
+        "sku": {"name": "Standard_LRS"},
+        "properties": {
+            "allowBlobPublicAccess": False, "supportsHttpsTrafficOnly": True,
+            "minimumTlsVersion": "TLS1_2", "allowSharedKeyAccess": False,
+            "publicNetworkAccess": "Disabled", "allowCrossTenantReplication": False,
+            "encryption": {"requireInfrastructureEncryption": True},
+            "networkAcls": {"defaultAction": "Deny"},
+            "sasPolicy": {"sasExpirationPeriod": "0.01:00:00"},
+        },
+    })
+    c = entry["configuration"]
+    assert c["supports_https_traffic_only"] is True
+    assert c["infrastructure_encryption_enabled"] is True
+    assert c["shared_key_access_disabled"] is True
+    assert c["public_network_access_enabled"] is False
+    assert c["sas_expiration_policy_set"] is True
+    assert c["network_default_action"] == "Deny"
+    assert c["minimum_tls_version"] == "TLS1_2"
+    assert c["cross_tenant_replication_enabled"] is False
+    assert c["account_replication_type"] == "LRS"
+    assert c["encryption"] == {"services": {"blob": {"enabled": True}}}
+
+
 def test_unrecognized_bicep_type_is_skipped():
     resources = {("main.bicep", "x"): {"type": "Microsoft.Foo/bars", "properties": {}}}
     assert map_resources(resources) == []
