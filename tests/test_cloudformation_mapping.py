@@ -419,3 +419,66 @@ Resources:
     cfg = entry["configuration"]
     assert cfg["env_encrypted_with_cmk"] is False
     assert cfg["xray_tracing_enabled"] is False
+
+
+# --- ecr / efs / elasticache / redshift -----------------------------------
+
+def test_ecr_repository_cfn():
+    entry = map_resources(parse_source('''
+Resources:
+  Repo:
+    Type: AWS::ECR::Repository
+    Properties:
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: "{}"
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {
+        "scan_on_push_enabled": True, "tag_immutability_enabled": True, "lifecycle_policy_enabled": True,
+    }
+
+
+def test_efs_file_system_cfn():
+    entry = map_resources(parse_source('''
+Resources:
+  Fs:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+      BackupPolicy:
+        Status: ENABLED
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {"encrypted": True, "backup_enabled": True}
+
+
+def test_elasticache_replication_group_cfn():
+    entry = map_resources(parse_source('''
+Resources:
+  Rg:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: true
+      AutoMinorVersionUpgrade: false
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {
+        "at_rest_encryption_enabled": True, "transit_encryption_enabled": True, "auto_minor_version_upgrade": False,
+    }
+
+
+def test_redshift_cluster_cfn_omits_public_when_absent():
+    entry = map_resources(parse_source('''
+Resources:
+  C:
+    Type: AWS::Redshift::Cluster
+    Properties:
+      Encrypted: true
+      LoggingProperties:
+        BucketName: my-logs
+''', is_yaml=True, file_key="t.yaml"))[0]
+    cfg = entry["configuration"]
+    assert cfg["encrypted"] is True
+    assert cfg["audit_logging_enabled"] is True
+    assert "publicly_accessible" not in cfg

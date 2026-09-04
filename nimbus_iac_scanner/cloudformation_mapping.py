@@ -421,6 +421,106 @@ def _map_lambda_function(key: ResourceKey, body: dict[str, Any]) -> dict[str, An
     }
 
 
+# ---------------------------------------------------------------------------
+# ECR repository (NG-AWS-ECR-001/002/004). ImageScanningConfiguration.
+# ScanOnPush; ImageTagMutability == "IMMUTABLE"; LifecyclePolicy is an INLINE
+# property on the repo (unlike Terraform's separate resource) -> present =
+# lifecycle_policy_enabled. policy_allows_public omitted (NOT_EVALUATED).
+# ---------------------------------------------------------------------------
+
+def _map_ecr_repository(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    scan = properties.get("ImageScanningConfiguration")
+    return {
+        "provider": "aws",
+        "resource_type": "ecr_repository",
+        "configuration": {
+            "scan_on_push_enabled": bool(isinstance(scan, dict) and scan.get("ScanOnPush", False)),
+            "tag_immutability_enabled": properties.get("ImageTagMutability", "MUTABLE") == "IMMUTABLE",
+            "lifecycle_policy_enabled": bool(properties.get("LifecyclePolicy")),
+        },
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::ECR::Repository.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# EFS file system (NG-AWS-EFS-001/002). Encrypted; BackupPolicy.Status ==
+# "ENABLED" (inline). policy_allows_anonymous_access omitted (NOT_EVALUATED).
+# ---------------------------------------------------------------------------
+
+def _map_efs_file_system(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    backup = properties.get("BackupPolicy")
+    return {
+        "provider": "aws",
+        "resource_type": "efs_file_system",
+        "configuration": {
+            "encrypted": bool(properties.get("Encrypted", False)),
+            "backup_enabled": bool(isinstance(backup, dict) and str(backup.get("Status")).upper() == "ENABLED"),
+        },
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::EFS::FileSystem.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# ElastiCache (NG-AWS-ELASTICACHE-001/002/003). ReplicationGroup carries all
+# three (AtRestEncryptionEnabled/TransitEncryptionEnabled/
+# AutoMinorVersionUpgrade); a bare CacheCluster only AutoMinorVersionUpgrade.
+# ---------------------------------------------------------------------------
+
+def _map_elasticache_replication_group(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "elasticache_cluster",
+        "configuration": {
+            "at_rest_encryption_enabled": bool(properties.get("AtRestEncryptionEnabled", False)),
+            "transit_encryption_enabled": bool(properties.get("TransitEncryptionEnabled", False)),
+            "auto_minor_version_upgrade": bool(properties.get("AutoMinorVersionUpgrade", True)),
+        },
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::ElastiCache::ReplicationGroup.{key[1]}",
+    }
+
+
+def _map_elasticache_cache_cluster(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "elasticache_cluster",
+        "configuration": {
+            "auto_minor_version_upgrade": bool(properties.get("AutoMinorVersionUpgrade", True)),
+        },
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::ElastiCache::CacheCluster.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Redshift cluster (NG-AWS-REDSHIFT-002/003; publicly_accessible only if
+# explicitly set -- same version-ambiguous default as the Terraform side).
+# Encrypted; LoggingProperties present -> audit_logging_enabled.
+# ---------------------------------------------------------------------------
+
+def _map_redshift_cluster(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    configuration: dict[str, Any] = {
+        "encrypted": bool(properties.get("Encrypted", False)),
+        "audit_logging_enabled": bool(properties.get("LoggingProperties")),
+    }
+    if "PubliclyAccessible" in properties:
+        configuration["publicly_accessible"] = bool(properties.get("PubliclyAccessible"))
+    return {
+        "provider": "aws",
+        "resource_type": "redshift_cluster",
+        "configuration": configuration,
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::Redshift::Cluster.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "AWS::S3::Bucket": _map_s3_bucket,
     "AWS::EC2::SecurityGroup": _map_security_group,
@@ -435,6 +535,11 @@ _MAPPERS = {
     "AWS::DynamoDB::Table": _map_dynamodb_table,
     "AWS::EC2::Instance": _map_ec2_instance,
     "AWS::Lambda::Function": _map_lambda_function,
+    "AWS::ECR::Repository": _map_ecr_repository,
+    "AWS::EFS::FileSystem": _map_efs_file_system,
+    "AWS::ElastiCache::ReplicationGroup": _map_elasticache_replication_group,
+    "AWS::ElastiCache::CacheCluster": _map_elasticache_cache_cluster,
+    "AWS::Redshift::Cluster": _map_redshift_cluster,
 }
 
 

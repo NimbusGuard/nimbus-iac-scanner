@@ -857,3 +857,107 @@ resource "aws_lambda_function" "img" {
 }
 ''')
     assert "runtime" not in map_resources(resources)[0]["configuration"]
+
+
+# --- ecr_repository (NG-AWS-ECR-001/002/004) ------------------------------
+
+def test_ecr_repository_all_fields_with_lifecycle():
+    resources = parse_source('''
+resource "aws_ecr_repository" "app" {
+  name                 = "app"
+  image_tag_mutability = "IMMUTABLE"
+  image_scanning_configuration { scan_on_push = true }
+}
+resource "aws_ecr_lifecycle_policy" "app" {
+  repository = aws_ecr_repository.app.name
+  policy     = "{}"
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "ecr_repository"][0]
+    assert entry["configuration"] == {
+        "scan_on_push_enabled": True, "tag_immutability_enabled": True, "lifecycle_policy_enabled": True,
+    }
+    assert "policy_allows_public" not in entry["configuration"]
+
+
+def test_ecr_repository_defaults_no_lifecycle():
+    resources = parse_source('''
+resource "aws_ecr_repository" "bare" { name = "bare" }
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "scan_on_push_enabled": False, "tag_immutability_enabled": False, "lifecycle_policy_enabled": False,
+    }
+
+
+# --- efs_file_system (NG-AWS-EFS-001/002) ---------------------------------
+
+def test_efs_file_system_encrypted_and_backup():
+    resources = parse_source('''
+resource "aws_efs_file_system" "fs" {
+  encrypted = true
+}
+resource "aws_efs_backup_policy" "fs" {
+  file_system_id = aws_efs_file_system.fs.id
+  backup_policy { status = "ENABLED" }
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "efs_file_system"][0]
+    assert entry["configuration"] == {"encrypted": True, "backup_enabled": True}
+
+
+def test_efs_file_system_defaults():
+    resources = parse_source('resource "aws_efs_file_system" "bare" {}')
+    assert map_resources(resources)[0]["configuration"] == {"encrypted": False, "backup_enabled": False}
+
+
+# --- elasticache (NG-AWS-ELASTICACHE-001/002/003) -------------------------
+
+def test_elasticache_replication_group_all_fields():
+    resources = parse_source('''
+resource "aws_elasticache_replication_group" "rg" {
+  replication_group_id       = "rg"
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+  auto_minor_version_upgrade = false
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "at_rest_encryption_enabled": True, "transit_encryption_enabled": True, "auto_minor_version_upgrade": False,
+    }
+
+
+def test_elasticache_cache_cluster_only_auto_upgrade():
+    resources = parse_source('''
+resource "aws_elasticache_cluster" "c" {
+  cluster_id = "c"
+  engine     = "memcached"
+}
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert cfg == {"auto_minor_version_upgrade": True}  # encryption fields omitted (not on this resource)
+
+
+# --- redshift_cluster (NG-AWS-REDSHIFT-001/002/003) -----------------------
+
+def test_redshift_cluster_encrypted_logging_and_explicit_public():
+    resources = parse_source('''
+resource "aws_redshift_cluster" "c" {
+  cluster_identifier  = "c"
+  encrypted           = true
+  publicly_accessible = false
+  logging { enable = true }
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "encrypted": True, "audit_logging_enabled": True, "publicly_accessible": False,
+    }
+
+
+def test_redshift_cluster_omits_publicly_accessible_when_absent():
+    """Version-ambiguous provider default -> omitted, not guessed."""
+    resources = parse_source('''
+resource "aws_redshift_cluster" "c" { cluster_identifier = "c" }
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert cfg == {"encrypted": False, "audit_logging_enabled": False}
+    assert "publicly_accessible" not in cfg

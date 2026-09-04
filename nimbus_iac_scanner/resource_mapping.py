@@ -413,6 +413,137 @@ def _map_dynamodb_table(key: ResourceKey, body: dict[str, Any], _all_resources) 
 
 
 # ---------------------------------------------------------------------------
+# ECR repository (NG-AWS-ECR-001/002/004; 003 policy_allows_public omitted).
+# scan_on_push_enabled (image_scanning_configuration block), tag_immutability
+# _enabled (image_tag_mutability == "IMMUTABLE", default "MUTABLE"),
+# lifecycle_policy_enabled (a separate aws_ecr_lifecycle_policy resource
+# referencing this repo). policy_allows_public (aws_ecr_repository_policy
+# principal analysis) omitted -> NG-AWS-ECR-003 NOT_EVALUATED.
+# ---------------------------------------------------------------------------
+
+def _ecr_has_lifecycle_policy(repo_name: str, all_resources: dict[ResourceKey, dict[str, Any]]) -> bool:
+    for (resource_type, _name), body in all_resources.items():
+        if resource_type != "aws_ecr_lifecycle_policy":
+            continue
+        ref = resolve_reference(body.get("repository"))
+        if (ref is not None and ref[0] == "aws_ecr_repository" and ref[1] == repo_name) \
+                or body.get("repository") == repo_name:
+            return True
+    return False
+
+
+def _map_ecr_repository(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    scan = _first_block(body, "image_scanning_configuration")
+    return {
+        "provider": "aws",
+        "resource_type": "ecr_repository",
+        "configuration": {
+            "scan_on_push_enabled": bool(scan is not None and scan.get("scan_on_push", False)),
+            "tag_immutability_enabled": body.get("image_tag_mutability", "MUTABLE") == "IMMUTABLE",
+            "lifecycle_policy_enabled": _ecr_has_lifecycle_policy(key[1], all_resources),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_ecr_repository.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# EFS file system (NG-AWS-EFS-001/002; 003 policy_allows_anonymous_access
+# omitted). encrypted (bool, default false); backup_enabled (a separate
+# aws_efs_backup_policy resource with backup_policy.status == "ENABLED").
+# policy_allows_anonymous_access (aws_efs_file_system_policy principal
+# analysis) omitted -> NG-AWS-EFS-003 NOT_EVALUATED.
+# ---------------------------------------------------------------------------
+
+def _efs_backup_enabled(fs_name: str, all_resources: dict[ResourceKey, dict[str, Any]]) -> bool:
+    for (resource_type, _name), body in all_resources.items():
+        if resource_type != "aws_efs_backup_policy":
+            continue
+        ref = resolve_reference(body.get("file_system_id"))
+        if not ((ref is not None and ref[0] == "aws_efs_file_system" and ref[1] == fs_name)
+                or body.get("file_system_id") == fs_name):
+            continue
+        policy = _first_block(body, "backup_policy")
+        if policy is not None and str(policy.get("status")).upper() == "ENABLED":
+            return True
+    return False
+
+
+def _map_efs_file_system(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "efs_file_system",
+        "configuration": {
+            "encrypted": bool(body.get("encrypted", False)),
+            "backup_enabled": _efs_backup_enabled(key[1], all_resources),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_efs_file_system.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# ElastiCache (NG-AWS-ELASTICACHE-001/002/003). at_rest_encryption_enabled /
+# transit_encryption_enabled (Redis, on the replication group; default
+# false) and auto_minor_version_upgrade (default true). A bare
+# aws_elasticache_cluster (memcached/legacy) carries no encryption fields --
+# only auto_minor_version_upgrade is emitted there, the two encryption keys
+# omitted (NOT_EVALUATED), never fabricated.
+# ---------------------------------------------------------------------------
+
+def _map_elasticache_replication_group(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "elasticache_cluster",
+        "configuration": {
+            "at_rest_encryption_enabled": bool(body.get("at_rest_encryption_enabled", False)),
+            "transit_encryption_enabled": bool(body.get("transit_encryption_enabled", False)),
+            "auto_minor_version_upgrade": bool(body.get("auto_minor_version_upgrade", True)),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_elasticache_replication_group.{key[1]}",
+    }
+
+
+def _map_elasticache_cluster(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "elasticache_cluster",
+        "configuration": {
+            "auto_minor_version_upgrade": bool(body.get("auto_minor_version_upgrade", True)),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_elasticache_cluster.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Redshift cluster (NG-AWS-REDSHIFT-002/003; 001 publicly_accessible only
+# when explicitly set). encrypted (bool, default false); audit_logging_enabled
+# (the inline `logging { enable = true }` block). publicly_accessible has a
+# version-dependent provider default (historically true, docs say false --
+# confirmed ambiguous), so it is OMITTED unless explicitly set -> a genuine
+# NOT_EVALUATED rather than a guessed default that could be a false PASS/FAIL.
+# ---------------------------------------------------------------------------
+
+def _map_redshift_cluster(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    logging = _first_block(body, "logging")
+    configuration: dict[str, Any] = {
+        "encrypted": bool(body.get("encrypted", False)),
+        "audit_logging_enabled": bool(logging is not None and logging.get("enable", False)),
+    }
+    if "publicly_accessible" in body:
+        configuration["publicly_accessible"] = bool(body.get("publicly_accessible"))
+    return {
+        "provider": "aws",
+        "resource_type": "redshift_cluster",
+        "configuration": configuration,
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_redshift_cluster.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # KMS key rotation (NG-AWS-KMS-001) -- `key_manager` is always "CUSTOMER"
 # for a Terraform-declared key (a structural fact: AWS-managed keys are
 # never created as a Terraform resource, they're implicit per-service
@@ -598,6 +729,11 @@ _MAPPERS = {
     "aws_dynamodb_table": _map_dynamodb_table,
     "aws_instance": _map_ec2_instance,
     "aws_lambda_function": _map_lambda_function,
+    "aws_ecr_repository": _map_ecr_repository,
+    "aws_efs_file_system": _map_efs_file_system,
+    "aws_elasticache_replication_group": _map_elasticache_replication_group,
+    "aws_elasticache_cluster": _map_elasticache_cluster,
+    "aws_redshift_cluster": _map_redshift_cluster,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -612,6 +748,8 @@ _CONSUMED_ONLY = {
     "aws_iam_user_policy",
     "aws_iam_role_policy",
     "aws_lambda_function_url",  # merged into its function's function_url_auth_none
+    "aws_ecr_lifecycle_policy",  # merged into its repo's lifecycle_policy_enabled
+    "aws_efs_backup_policy",  # merged into its file system's backup_enabled
 }
 
 

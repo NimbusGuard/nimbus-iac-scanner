@@ -18,13 +18,13 @@
 ## Queue — AWS (38)
 - [x] ec2_instance (6 controls) -- partial: ssm_managed/secrets_detected omitted (not knowable from IaC)
 - [x] lambda_function (6 controls) -- TF also correlates function_url; resource_policy_allows_public/secrets_detected omitted
-- [ ] ecr_repository (4 controls)
+- [x] ecr_repository (4 controls) -- policy_allows_public omitted
 - [ ] cloudfront_distribution (4 controls)
 - [ ] iam_password_policy (3 controls)
 - [x] dynamodb_table (3 controls)
-- [ ] efs_file_system (3 controls)
-- [ ] elasticache_cluster (3 controls)
-- [ ] redshift_cluster (3 controls)
+- [x] efs_file_system (3 controls) -- policy_allows_anonymous_access omitted
+- [x] elasticache_cluster (3 controls)
+- [x] redshift_cluster (3 controls) -- publicly_accessible only when explicit
 - [ ] api_gateway_stage (3 controls)
 - [ ] sagemaker_notebook_instance (3 controls)
 - [ ] ebs_snapshot (2 controls)
