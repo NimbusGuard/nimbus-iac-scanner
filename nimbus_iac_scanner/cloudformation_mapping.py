@@ -679,6 +679,151 @@ def _map_athena_workgroup(key: ResourceKey, body: dict[str, Any]) -> dict[str, A
     }
 
 
+# ---------------------------------------------------------------------------
+# Glue / Kinesis / Firehose / Step Functions / Backup / DMS / MQ /
+# CodeBuild / ECS / Subnet / Route53 hosted zone (1 control each; AMI and
+# the VPC flow-log control have no derivable CloudFormation shape).
+# ---------------------------------------------------------------------------
+
+def _map_glue_data_catalog(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    settings = properties.get("DataCatalogEncryptionSettings") or {}
+    at_rest = settings.get("EncryptionAtRest") or {}
+    mode = str(at_rest.get("CatalogEncryptionMode") or "").upper()
+    conn = settings.get("ConnectionPasswordEncryption") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "glue_data_catalog",
+        "configuration": {
+            "metadata_encryption_enabled": mode not in ("", "DISABLED"),
+            "connection_password_encryption_enabled": bool(conn.get("ReturnConnectionPasswordEncrypted", False)),
+        },
+        "tags": {},
+        "identifier": f"AWS::Glue::DataCatalogEncryptionSettings.{key[1]}",
+    }
+
+
+def _map_kinesis_stream(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    enc = properties.get("StreamEncryption") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "kinesis_stream",
+        "configuration": {"encryption_enabled": str(enc.get("EncryptionType") or "").upper() == "KMS"},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::Kinesis::Stream.{key[1]}",
+    }
+
+
+def _map_firehose_delivery_stream(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "firehose_delivery_stream",
+        "configuration": {"encryption_enabled": bool(properties.get("DeliveryStreamEncryptionConfigurationInput"))},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::KinesisFirehose::DeliveryStream.{key[1]}",
+    }
+
+
+def _map_sfn_state_machine(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    log = properties.get("LoggingConfiguration") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "sfn_state_machine",
+        "configuration": {"logging_enabled": str(log.get("Level") or "OFF").upper() != "OFF"},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::StepFunctions::StateMachine.{key[1]}",
+    }
+
+
+def _map_backup_vault(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "backup_vault",
+        "configuration": {"encrypted_with_cmk": bool(properties.get("EncryptionKeyArn"))},
+        "tags": {},  # BackupVaultTags is a map, not a standard tag list
+        "identifier": f"AWS::Backup::BackupVault.{key[1]}",
+    }
+
+
+def _map_dms_replication_instance(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "dms_replication_instance",
+        "configuration": {"publicly_accessible": bool(properties.get("PubliclyAccessible", True))},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::DMS::ReplicationInstance.{key[1]}",
+    }
+
+
+def _map_mq_broker(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "mq_broker",
+        "configuration": {"publicly_accessible": bool(properties.get("PubliclyAccessible", False))},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::AmazonMQ::Broker.{key[1]}",
+    }
+
+
+def _map_codebuild_project(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    env = properties.get("Environment") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "codebuild_project",
+        "configuration": {"privileged_mode": bool(env.get("PrivilegedMode", False))},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::CodeBuild::Project.{key[1]}",
+    }
+
+
+def _map_ecs_cluster(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    settings = properties.get("ClusterSettings")
+    if not isinstance(settings, list):
+        settings = []
+    insights = any(
+        isinstance(s, dict) and str(s.get("Name") or "") == "containerInsights"
+        and str(s.get("Value") or "").lower() in ("enabled", "enhanced")
+        for s in settings
+    )
+    return {
+        "provider": "aws",
+        "resource_type": "ecs_cluster",
+        "configuration": {"container_insights_enabled": insights},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::ECS::Cluster.{key[1]}",
+    }
+
+
+def _map_subnet(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "subnet",
+        "configuration": {"map_public_ip_on_launch": bool(properties.get("MapPublicIpOnLaunch", False))},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::EC2::Subnet.{key[1]}",
+    }
+
+
+def _map_route53_hosted_zone(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "route53_hosted_zone",
+        "configuration": {"query_logging_enabled": bool(properties.get("QueryLoggingConfig"))},
+        "tags": {},  # HostedZoneTags is a specialized shape, not a standard tag list
+        "identifier": f"AWS::Route53::HostedZone.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "AWS::S3::Bucket": _map_s3_bucket,
     "AWS::EC2::SecurityGroup": _map_security_group,
@@ -707,6 +852,17 @@ _MAPPERS = {
     "AWS::DocDB::DBCluster": _map_docdb_cluster,
     "AWS::WAFv2::WebACL": _map_waf_web_acl,
     "AWS::Athena::WorkGroup": _map_athena_workgroup,
+    "AWS::Glue::DataCatalogEncryptionSettings": _map_glue_data_catalog,
+    "AWS::Kinesis::Stream": _map_kinesis_stream,
+    "AWS::KinesisFirehose::DeliveryStream": _map_firehose_delivery_stream,
+    "AWS::StepFunctions::StateMachine": _map_sfn_state_machine,
+    "AWS::Backup::BackupVault": _map_backup_vault,
+    "AWS::DMS::ReplicationInstance": _map_dms_replication_instance,
+    "AWS::AmazonMQ::Broker": _map_mq_broker,
+    "AWS::CodeBuild::Project": _map_codebuild_project,
+    "AWS::ECS::Cluster": _map_ecs_cluster,
+    "AWS::EC2::Subnet": _map_subnet,
+    "AWS::Route53::HostedZone": _map_route53_hosted_zone,
 }
 
 

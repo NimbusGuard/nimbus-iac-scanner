@@ -806,6 +806,250 @@ def _map_athena_workgroup(key: ResourceKey, body: dict[str, Any], _all_resources
 
 
 # ---------------------------------------------------------------------------
+# Glue Data Catalog encryption settings (NG-AWS-GLUE-001/002).
+# ---------------------------------------------------------------------------
+
+def _map_glue_data_catalog(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    settings = _first_block(body, "data_catalog_encryption_settings")
+    metadata_enc = False
+    conn_pw_enc = False
+    if settings is not None:
+        at_rest = _first_block(settings, "encryption_at_rest")
+        if at_rest is not None:
+            mode = str(at_rest.get("catalog_encryption_mode") or "").upper()
+            metadata_enc = mode not in ("", "DISABLED")
+        conn = _first_block(settings, "connection_password_encryption")
+        if conn is not None:
+            conn_pw_enc = bool(conn.get("return_connection_password_encrypted", False))
+    return {
+        "provider": "aws",
+        "resource_type": "glue_data_catalog",
+        "configuration": {
+            "metadata_encryption_enabled": metadata_enc,
+            "connection_password_encryption_enabled": conn_pw_enc,
+        },
+        "tags": {},
+        "identifier": f"aws_glue_data_catalog_encryption_settings.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Kinesis stream (NG-AWS-KINESIS-001): encryption_enabled = encryption_type
+# is KMS. Firehose delivery stream (NG-AWS-FIREHOSE-001): a
+# server_side_encryption block enabled (collector reads the stream's own
+# DeliveryStreamEncryptionConfiguration.Status == ENABLED).
+# ---------------------------------------------------------------------------
+
+def _map_kinesis_stream(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "kinesis_stream",
+        "configuration": {"encryption_enabled": str(body.get("encryption_type") or "").upper() == "KMS"},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_kinesis_stream.{key[1]}",
+    }
+
+
+def _map_firehose_delivery_stream(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    sse = _first_block(body, "server_side_encryption")
+    enabled = sse is not None and bool(sse.get("enabled", False))
+    return {
+        "provider": "aws",
+        "resource_type": "firehose_delivery_stream",
+        "configuration": {"encryption_enabled": enabled},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_kinesis_firehose_delivery_stream.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Step Functions state machine (NG-AWS-SFN-001): logging_enabled = a
+# logging_configuration block with level != "OFF" (default OFF).
+# ---------------------------------------------------------------------------
+
+def _map_sfn_state_machine(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    log = _first_block(body, "logging_configuration")
+    enabled = log is not None and str(log.get("level") or "OFF").upper() != "OFF"
+    return {
+        "provider": "aws",
+        "resource_type": "sfn_state_machine",
+        "configuration": {"logging_enabled": enabled},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_sfn_state_machine.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Backup vault (NG-AWS-BACKUP-002): encrypted_with_cmk = a customer
+# kms_key_arn is set (a vault is always encrypted with an AWS-managed key
+# by default; the control wants a customer-managed one).
+# ---------------------------------------------------------------------------
+
+def _map_backup_vault(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "backup_vault",
+        "configuration": {"encrypted_with_cmk": bool(body.get("kms_key_arn"))},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_backup_vault.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# DMS replication instance (NG-AWS-DMS-001): publicly_accessible, TF/AWS
+# default TRUE (a real, confirmed insecure default). MQ broker
+# (NG-AWS-MQ-001): publicly_accessible, default false.
+# ---------------------------------------------------------------------------
+
+def _map_dms_replication_instance(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "dms_replication_instance",
+        "configuration": {"publicly_accessible": bool(body.get("publicly_accessible", True))},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_dms_replication_instance.{key[1]}",
+    }
+
+
+def _map_mq_broker(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "mq_broker",
+        "configuration": {"publicly_accessible": bool(body.get("publicly_accessible", False))},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_mq_broker.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# CodeBuild project (NG-AWS-CODEBUILD-001): privileged_mode inside the
+# environment block (default false). ECS cluster (NG-AWS-ECS-001):
+# container_insights_enabled via a setting { name = "containerInsights" }.
+# ---------------------------------------------------------------------------
+
+def _map_codebuild_project(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    env = _first_block(body, "environment")
+    privileged = env is not None and bool(env.get("privileged_mode", False))
+    return {
+        "provider": "aws",
+        "resource_type": "codebuild_project",
+        "configuration": {"privileged_mode": privileged},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_codebuild_project.{key[1]}",
+    }
+
+
+def _map_ecs_cluster(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    settings = body.get("setting")
+    if isinstance(settings, dict):
+        settings = [settings]
+    elif not isinstance(settings, list):
+        settings = []
+    insights = any(
+        isinstance(s, dict) and str(s.get("name") or "") == "containerInsights"
+        and str(s.get("value") or "").lower() in ("enabled", "enhanced")
+        for s in settings
+    )
+    return {
+        "provider": "aws",
+        "resource_type": "ecs_cluster",
+        "configuration": {"container_insights_enabled": insights},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_ecs_cluster.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Subnet (NG-AWS-VPC-002): map_public_ip_on_launch (default false).
+# ---------------------------------------------------------------------------
+
+def _map_subnet(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "subnet",
+        "configuration": {"map_public_ip_on_launch": bool(body.get("map_public_ip_on_launch", False))},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_subnet.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# AMI (NG-AWS-EC2-012): public = a launch permission grants group "all".
+# An AMI with no aws_ami_launch_permission granting group=all is private
+# (the real, confirmed default). No CloudFormation resource type exists for
+# an AMI, so Terraform only.
+# ---------------------------------------------------------------------------
+
+def _map_ami(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    public = False
+    for (resource_type, _name), lp in all_resources.items():
+        if resource_type != "aws_ami_launch_permission":
+            continue
+        if str(lp.get("group") or "") != "all":
+            continue
+        ref = resolve_reference(lp.get("image_id"))
+        if (ref is not None and ref[0] == "aws_ami" and ref[1] == key[1]) or lp.get("image_id") == key[1]:
+            public = True
+            break
+    return {
+        "provider": "aws",
+        "resource_type": "ami",
+        "configuration": {"public": public},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_ami.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# VPC (NG-AWS-VPC-001): flow_logs_enabled = an aws_flow_log targets this
+# VPC. CloudFormation flow logs are a separate AWS::EC2::FlowLog resource
+# with no cross-resource view here, so the CFN mapper doesn't cover this
+# (a bare AWS::EC2::VPC has no flow-log property) -> Terraform only.
+# ---------------------------------------------------------------------------
+
+def _map_vpc(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    flow_logs = False
+    for (resource_type, _name), fl in all_resources.items():
+        if resource_type != "aws_flow_log":
+            continue
+        ref = resolve_reference(fl.get("vpc_id"))
+        if (ref is not None and ref[0] == "aws_vpc" and ref[1] == key[1]) or fl.get("vpc_id") == key[1]:
+            flow_logs = True
+            break
+    return {
+        "provider": "aws",
+        "resource_type": "vpc",
+        "configuration": {"flow_logs_enabled": flow_logs},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_vpc.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Route53 hosted zone (NG-AWS-ROUTE53-001): query_logging_enabled = an
+# aws_route53_query_log targets this zone (default false). CFN's own
+# AWS::Route53::HostedZone carries a QueryLoggingConfig property directly.
+# ---------------------------------------------------------------------------
+
+def _map_route53_hosted_zone(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    query_logging = False
+    for (resource_type, _name), ql in all_resources.items():
+        if resource_type != "aws_route53_query_log":
+            continue
+        ref = resolve_reference(ql.get("zone_id"))
+        if (ref is not None and ref[0] == "aws_route53_zone" and ref[1] == key[1]) or ql.get("zone_id") == key[1]:
+            query_logging = True
+            break
+    return {
+        "provider": "aws",
+        "resource_type": "route53_hosted_zone",
+        "configuration": {"query_logging_enabled": query_logging},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_route53_zone.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # KMS key rotation (NG-AWS-KMS-001) -- `key_manager` is always "CUSTOMER"
 # for a Terraform-declared key (a structural fact: AWS-managed keys are
 # never created as a Terraform resource, they're implicit per-service
@@ -1006,6 +1250,19 @@ _MAPPERS = {
     "aws_docdb_cluster": _map_docdb_cluster,
     "aws_wafv2_web_acl": _map_waf_web_acl,
     "aws_athena_workgroup": _map_athena_workgroup,
+    "aws_glue_data_catalog_encryption_settings": _map_glue_data_catalog,
+    "aws_kinesis_stream": _map_kinesis_stream,
+    "aws_kinesis_firehose_delivery_stream": _map_firehose_delivery_stream,
+    "aws_sfn_state_machine": _map_sfn_state_machine,
+    "aws_backup_vault": _map_backup_vault,
+    "aws_dms_replication_instance": _map_dms_replication_instance,
+    "aws_mq_broker": _map_mq_broker,
+    "aws_codebuild_project": _map_codebuild_project,
+    "aws_ecs_cluster": _map_ecs_cluster,
+    "aws_subnet": _map_subnet,
+    "aws_ami": _map_ami,
+    "aws_vpc": _map_vpc,
+    "aws_route53_zone": _map_route53_hosted_zone,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -1024,6 +1281,9 @@ _CONSUMED_ONLY = {
     "aws_efs_backup_policy",  # merged into its file system's backup_enabled
     "aws_secretsmanager_secret_rotation",  # merged into its secret's rotation_enabled
     "aws_wafv2_web_acl_logging_configuration",  # merged into its ACL's logging_enabled
+    "aws_ami_launch_permission",  # merged into its AMI's public flag
+    "aws_flow_log",  # merged into its VPC's flow_logs_enabled
+    "aws_route53_query_log",  # merged into its zone's query_logging_enabled
 }
 
 

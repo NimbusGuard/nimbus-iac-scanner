@@ -663,3 +663,147 @@ Resources:
     assert enc["configuration"] == {
         "results_encryption_enabled": True, "enforce_workgroup_configuration": True,
     }
+
+
+# --- glue/kinesis/firehose/sfn/backup/dms/mq/codebuild/ecs/subnet/route53 --
+
+def _cfn(t):
+    return map_resources(parse_source(t, is_yaml=True, file_key="t.yaml"))[0]["configuration"]
+
+
+def test_glue_data_catalog_cfn():
+    assert _cfn('''
+Resources:
+  G:
+    Type: AWS::Glue::DataCatalogEncryptionSettings
+    Properties:
+      CatalogId: "123"
+      DataCatalogEncryptionSettings:
+        EncryptionAtRest:
+          CatalogEncryptionMode: SSE-KMS
+        ConnectionPasswordEncryption:
+          ReturnConnectionPasswordEncrypted: true
+''') == {"metadata_encryption_enabled": True, "connection_password_encryption_enabled": True}
+
+
+def test_kinesis_stream_cfn():
+    assert _cfn('''
+Resources:
+  S:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+''') == {"encryption_enabled": True}
+
+
+def test_firehose_cfn():
+    assert _cfn('''
+Resources:
+  F:
+    Type: AWS::KinesisFirehose::DeliveryStream
+    Properties:
+      DeliveryStreamEncryptionConfigurationInput:
+        KeyType: AWS_OWNED_CMK
+''') == {"encryption_enabled": True}
+
+
+def test_sfn_cfn():
+    assert _cfn('''
+Resources:
+  M:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      LoggingConfiguration:
+        Level: ALL
+''') == {"logging_enabled": True}
+
+
+def test_backup_vault_cfn():
+    assert _cfn('''
+Resources:
+  V:
+    Type: AWS::Backup::BackupVault
+    Properties:
+      BackupVaultName: v
+      EncryptionKeyArn: arn:aws:kms:...:key/abc
+''') == {"encrypted_with_cmk": True}
+
+
+def test_dms_cfn_default_true():
+    assert _cfn('''
+Resources:
+  R:
+    Type: AWS::DMS::ReplicationInstance
+    Properties:
+      ReplicationInstanceClass: dms.t3.micro
+''') == {"publicly_accessible": True}
+
+
+def test_mq_cfn_default_false():
+    assert _cfn('''
+Resources:
+  B:
+    Type: AWS::AmazonMQ::Broker
+    Properties:
+      BrokerName: b
+      EngineType: ActiveMQ
+''') == {"publicly_accessible": False}
+
+
+def test_codebuild_cfn():
+    assert _cfn('''
+Resources:
+  P:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: x
+        Type: LINUX_CONTAINER
+        PrivilegedMode: true
+''') == {"privileged_mode": True}
+
+
+def test_ecs_cluster_cfn():
+    assert _cfn('''
+Resources:
+  C:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+''') == {"container_insights_enabled": True}
+
+
+def test_subnet_cfn():
+    assert _cfn('''
+Resources:
+  S:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: vpc-1
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+''') == {"map_public_ip_on_launch": True}
+
+
+def test_route53_hosted_zone_cfn_query_logging():
+    assert _cfn('''
+Resources:
+  Z:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: example.com
+      QueryLoggingConfig:
+        CloudWatchLogsLogGroupArn: arn:aws:logs:...:log-group:x
+''') == {"query_logging_enabled": True}
+    assert _cfn('''
+Resources:
+  Z:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: example.com
+''') == {"query_logging_enabled": False}

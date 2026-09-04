@@ -35,23 +35,23 @@
 - [x] acm_certificate (2 controls) -- days_to_expiry omitted (runtime)
 - [x] waf_web_acl (2 controls) -- CFN omits logging (separate resource)
 - [x] athena_workgroup (2 controls) -- TF/CFN enforce-default divergence documented
-- [ ] glue_data_catalog (2 controls)
+- [x] glue_data_catalog (2 controls)
 - [x] emr_cluster -- SKIPPED: master_public_ip runtime/subnet-dependent, encryption via cross-resource security-config JSON
 - [x] docdb_cluster (2 controls)
-- [ ] ami (1 controls)
-- [ ] ecs_cluster (1 controls)
-- [ ] vpc (1 controls)
-- [ ] subnet (1 controls)
+- [x] ami (1 control) -- public via cross-resource launch permission; TF only
+- [x] ecs_cluster (1 control)
+- [x] vpc (1 control) -- flow_logs via cross-resource aws_flow_log; TF only
+- [x] subnet (1 control)
 - [ ] network_acl (1 controls)
-- [ ] route53_hosted_zone (1 controls)
-- [ ] kinesis_stream (1 controls)
-- [ ] firehose_delivery_stream (1 controls)
-- [ ] sfn_state_machine (1 controls)
-- [ ] backup_vault (1 controls)
-- [ ] cloudformation_stack (1 controls)
-- [ ] dms_replication_instance (1 controls)
-- [ ] mq_broker (1 controls)
-- [ ] codebuild_project (1 controls)
+- [x] route53_hosted_zone (1 control) -- TF cross-resource query-log; CFN QueryLoggingConfig
+- [x] kinesis_stream (1 control)
+- [x] firehose_delivery_stream (1 control)
+- [x] sfn_state_machine (1 control)
+- [x] backup_vault (1 control)
+- [x] cloudformation_stack -- SKIPPED: termination protection not an aws_cloudformation_stack attribute
+- [x] dms_replication_instance (1 control) -- publicly_accessible default true
+- [x] mq_broker (1 control)
+- [x] codebuild_project (1 control)
 - [ ] route53_domain (1 controls)
 - [ ] * (1 controls)
 
@@ -81,7 +81,7 @@
 - [ ] api_management (2 controls)
 - [ ] managed_identity (1 controls)
 - [ ] log_analytics_workspace (1 controls)
-- [ ] subnet (1 controls)
+- [x] subnet (1 control)
 - [ ] key_vault_secret (1 controls)
 - [ ] storage_container (1 controls)
 - [ ] synapse_workspace (1 controls)

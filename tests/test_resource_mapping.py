@@ -1184,3 +1184,167 @@ def test_athena_workgroup_no_config_block_uses_terraform_default_enforce_true():
     assert map_resources(resources)[0]["configuration"] == {
         "results_encryption_enabled": False, "enforce_workgroup_configuration": True,
     }
+
+
+# --- glue_data_catalog / kinesis / firehose / sfn / backup ----------------
+
+def test_glue_data_catalog_both_encryptions():
+    resources = parse_source('''
+resource "aws_glue_data_catalog_encryption_settings" "s" {
+  data_catalog_encryption_settings {
+    encryption_at_rest { catalog_encryption_mode = "SSE-KMS" }
+    connection_password_encryption { return_connection_password_encrypted = true }
+  }
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "metadata_encryption_enabled": True, "connection_password_encryption_enabled": True,
+    }
+
+
+def test_glue_data_catalog_disabled_default():
+    resources = parse_source('''
+resource "aws_glue_data_catalog_encryption_settings" "s" {
+  data_catalog_encryption_settings {
+    encryption_at_rest { catalog_encryption_mode = "DISABLED" }
+  }
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "metadata_encryption_enabled": False, "connection_password_encryption_enabled": False,
+    }
+
+
+def test_kinesis_stream_kms():
+    assert map_resources(parse_source('''
+resource "aws_kinesis_stream" "s" { name = "s" shard_count = 1 encryption_type = "KMS" }
+'''))[0]["configuration"] == {"encryption_enabled": True}
+    assert map_resources(parse_source('resource "aws_kinesis_stream" "s" { name = "s" shard_count = 1 }'))[0]["configuration"] == {"encryption_enabled": False}
+
+
+def test_firehose_sse_block():
+    assert map_resources(parse_source('''
+resource "aws_kinesis_firehose_delivery_stream" "f" {
+  name = "f" destination = "extended_s3"
+  server_side_encryption { enabled = true }
+}
+'''))[0]["configuration"] == {"encryption_enabled": True}
+    assert map_resources(parse_source('''
+resource "aws_kinesis_firehose_delivery_stream" "f" { name = "f" destination = "extended_s3" }
+'''))[0]["configuration"] == {"encryption_enabled": False}
+
+
+def test_sfn_logging_level():
+    assert map_resources(parse_source('''
+resource "aws_sfn_state_machine" "m" {
+  name = "m" role_arn = "arn:..." definition = "{}"
+  logging_configuration { level = "ALL" }
+}
+'''))[0]["configuration"] == {"logging_enabled": True}
+    assert map_resources(parse_source('''
+resource "aws_sfn_state_machine" "m" {
+  name = "m" role_arn = "arn:..." definition = "{}"
+  logging_configuration { level = "OFF" }
+}
+'''))[0]["configuration"] == {"logging_enabled": False}
+    assert map_resources(parse_source('''
+resource "aws_sfn_state_machine" "m" { name = "m" role_arn = "arn:..." definition = "{}" }
+'''))[0]["configuration"] == {"logging_enabled": False}
+
+
+def test_backup_vault_cmk():
+    assert map_resources(parse_source('''
+resource "aws_backup_vault" "v" { name = "v" kms_key_arn = "arn:aws:kms:...:key/abc" }
+'''))[0]["configuration"] == {"encrypted_with_cmk": True}
+    assert map_resources(parse_source('resource "aws_backup_vault" "v" { name = "v" }'))[0]["configuration"] == {"encrypted_with_cmk": False}
+
+
+# --- dms / mq / codebuild / ecs / subnet ----------------------------------
+
+def test_dms_publicly_accessible_defaults_true():
+    assert map_resources(parse_source('''
+resource "aws_dms_replication_instance" "r" { replication_instance_id = "r" replication_instance_class = "dms.t3.micro" }
+'''))[0]["configuration"] == {"publicly_accessible": True}
+    assert map_resources(parse_source('''
+resource "aws_dms_replication_instance" "r" { replication_instance_id = "r" replication_instance_class = "dms.t3.micro" publicly_accessible = false }
+'''))[0]["configuration"] == {"publicly_accessible": False}
+
+
+def test_mq_broker_publicly_accessible_defaults_false():
+    assert map_resources(parse_source('''
+resource "aws_mq_broker" "b" { broker_name = "b" engine_type = "ActiveMQ" engine_version = "5.17" host_instance_type = "mq.t3.micro" }
+'''))[0]["configuration"] == {"publicly_accessible": False}
+
+
+def test_codebuild_privileged_mode():
+    assert map_resources(parse_source('''
+resource "aws_codebuild_project" "p" {
+  name = "p" service_role = "arn:..."
+  environment { compute_type = "BUILD_GENERAL1_SMALL" image = "x" type = "LINUX_CONTAINER" privileged_mode = true }
+  artifacts { type = "NO_ARTIFACTS" }
+  source { type = "NO_SOURCE" }
+}
+'''))[0]["configuration"] == {"privileged_mode": True}
+
+
+def test_ecs_cluster_container_insights():
+    assert map_resources(parse_source('''
+resource "aws_ecs_cluster" "c" {
+  name = "c"
+  setting { name = "containerInsights" value = "enabled" }
+}
+'''))[0]["configuration"] == {"container_insights_enabled": True}
+    assert map_resources(parse_source('resource "aws_ecs_cluster" "c" { name = "c" }'))[0]["configuration"] == {"container_insights_enabled": False}
+
+
+def test_subnet_map_public_ip():
+    assert map_resources(parse_source('''
+resource "aws_subnet" "s" { vpc_id = "vpc-1" cidr_block = "10.0.1.0/24" map_public_ip_on_launch = true }
+'''))[0]["configuration"] == {"map_public_ip_on_launch": True}
+    assert map_resources(parse_source('resource "aws_subnet" "s" { vpc_id = "vpc-1" cidr_block = "10.0.1.0/24" }'))[0]["configuration"] == {"map_public_ip_on_launch": False}
+
+
+# --- ami / vpc / route53_hosted_zone (cross-resource) ---------------------
+
+def test_ami_public_via_launch_permission_all():
+    resources = parse_source('''
+resource "aws_ami" "img" { name = "img" }
+resource "aws_ami_launch_permission" "pub" {
+  image_id = aws_ami.img.id
+  group    = "all"
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "ami"][0]
+    assert entry["configuration"] == {"public": True}
+
+
+def test_ami_private_by_default():
+    resources = parse_source('resource "aws_ami" "img" { name = "img" }')
+    assert map_resources(resources)[0]["configuration"] == {"public": False}
+
+
+def test_vpc_flow_logs_via_flow_log_resource():
+    resources = parse_source('''
+resource "aws_vpc" "v" { cidr_block = "10.0.0.0/16" }
+resource "aws_flow_log" "fl" {
+  vpc_id          = aws_vpc.v.id
+  traffic_type    = "ALL"
+  log_destination = "arn:aws:logs:...:log-group:x"
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "vpc"][0]
+    assert entry["configuration"] == {"flow_logs_enabled": True}
+    assert map_resources(parse_source('resource "aws_vpc" "v" { cidr_block = "10.0.0.0/16" }'))[0]["configuration"] == {"flow_logs_enabled": False}
+
+
+def test_route53_hosted_zone_query_logging_via_query_log_resource():
+    resources = parse_source('''
+resource "aws_route53_zone" "z" { name = "example.com" }
+resource "aws_route53_query_log" "ql" {
+  zone_id                  = aws_route53_zone.z.zone_id
+  cloudwatch_log_group_arn = "arn:aws:logs:...:log-group:x"
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "route53_hosted_zone"][0]
+    assert entry["configuration"] == {"query_logging_enabled": True}
+    assert map_resources(parse_source('resource "aws_route53_zone" "z" { name = "example.com" }'))[0]["configuration"] == {"query_logging_enabled": False}
