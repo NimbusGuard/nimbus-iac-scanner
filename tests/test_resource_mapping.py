@@ -961,3 +961,89 @@ resource "aws_redshift_cluster" "c" { cluster_identifier = "c" }
     cfg = map_resources(resources)[0]["configuration"]
     assert cfg == {"encrypted": False, "audit_logging_enabled": False}
     assert "publicly_accessible" not in cfg
+
+
+# --- iam_password_policy (NG-AWS-IAM-008/009/010) -------------------------
+
+def test_iam_password_policy_all_fields():
+    resources = parse_source('''
+resource "aws_iam_account_password_policy" "strict" {
+  minimum_password_length        = 14
+  require_symbols                = true
+  require_numbers               = true
+  require_lowercase_characters  = true
+  require_uppercase_characters  = true
+  max_password_age              = 90
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "minimum_password_length": 14, "require_symbols": True, "require_numbers": True,
+        "require_lowercase": True, "require_uppercase": True, "max_password_age_days": 90,
+    }
+
+
+def test_iam_password_policy_defaults():
+    resources = parse_source('resource "aws_iam_account_password_policy" "weak" {}')
+    assert map_resources(resources)[0]["configuration"] == {
+        "minimum_password_length": 6, "require_symbols": False, "require_numbers": False,
+        "require_lowercase": False, "require_uppercase": False, "max_password_age_days": 0,
+    }
+
+
+# --- sns_topic / sqs_queue -------------------------------------------------
+
+def test_sns_topic_kms_encryption():
+    assert map_resources(parse_source('''
+resource "aws_sns_topic" "enc" { kms_master_key_id = "alias/aws/sns" }
+'''))[0]["configuration"] == {"kms_encryption_enabled": True}
+    assert map_resources(parse_source('resource "aws_sns_topic" "plain" {}'))[0]["configuration"] == {"kms_encryption_enabled": False}
+
+
+def test_sqs_queue_encryption_either_mechanism():
+    assert map_resources(parse_source('''
+resource "aws_sqs_queue" "kms" { kms_master_key_id = "alias/aws/sqs" }
+'''))[0]["configuration"] == {"encryption_enabled": True}
+    assert map_resources(parse_source('''
+resource "aws_sqs_queue" "sse" { sqs_managed_sse_enabled = true }
+'''))[0]["configuration"] == {"encryption_enabled": True}
+    assert map_resources(parse_source('resource "aws_sqs_queue" "plain" {}'))[0]["configuration"] == {"encryption_enabled": False}
+
+
+# --- secretsmanager_secret (NG-AWS-SECRETSMANAGER-001/002) ----------------
+
+def test_secretsmanager_secret_cmk_and_correlated_rotation():
+    resources = parse_source('''
+resource "aws_secretsmanager_secret" "s" { kms_key_id = "arn:aws:kms:...:key/abc" }
+resource "aws_secretsmanager_secret_rotation" "s" {
+  secret_id           = aws_secretsmanager_secret.s.id
+  rotation_lambda_arn = "arn:aws:lambda:...:fn"
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "secretsmanager_secret"][0]
+    assert entry["configuration"] == {"encrypted_with_cmk": True, "rotation_enabled": True}
+
+
+def test_secretsmanager_secret_defaults_no_rotation():
+    resources = parse_source('resource "aws_secretsmanager_secret" "s" {}')
+    assert map_resources(resources)[0]["configuration"] == {"encrypted_with_cmk": False, "rotation_enabled": False}
+
+
+# --- acm_certificate (NG-AWS-ACM-002; 001 days_to_expiry omitted) ---------
+
+def test_acm_certificate_transparency_default_enabled_when_absent():
+    resources = parse_source('''
+resource "aws_acm_certificate" "c" { domain_name = "example.com" }
+''')
+    cfg = map_resources(resources)[0]["configuration"]
+    assert cfg == {"transparency_logging_enabled": True}
+    assert "days_to_expiry" not in cfg  # runtime value, never guessed from IaC
+
+
+def test_acm_certificate_transparency_explicitly_disabled():
+    resources = parse_source('''
+resource "aws_acm_certificate" "c" {
+  domain_name = "example.com"
+  options { certificate_transparency_logging_preference = "DISABLED" }
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {"transparency_logging_enabled": False}

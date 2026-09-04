@@ -20,7 +20,7 @@
 - [x] lambda_function (6 controls) -- TF also correlates function_url; resource_policy_allows_public/secrets_detected omitted
 - [x] ecr_repository (4 controls) -- policy_allows_public omitted
 - [ ] cloudfront_distribution (4 controls)
-- [ ] iam_password_policy (3 controls)
+- [x] iam_password_policy (3 controls) -- Terraform only (no CFN resource)
 - [x] dynamodb_table (3 controls)
 - [x] efs_file_system (3 controls) -- policy_allows_anonymous_access omitted
 - [x] elasticache_cluster (3 controls)
@@ -29,10 +29,10 @@
 - [ ] sagemaker_notebook_instance (3 controls)
 - [ ] ebs_snapshot (2 controls)
 - [ ] rds_snapshot (2 controls)
-- [ ] sns_topic (2 controls)
-- [ ] sqs_queue (2 controls)
-- [ ] secretsmanager_secret (2 controls)
-- [ ] acm_certificate (2 controls)
+- [x] sns_topic (2 controls) -- policy_allows_public omitted
+- [x] sqs_queue (2 controls) -- policy_allows_public omitted
+- [x] secretsmanager_secret (2 controls) -- CFN omits rotation (separate resource)
+- [x] acm_certificate (2 controls) -- days_to_expiry omitted (runtime)
 - [ ] waf_web_acl (2 controls)
 - [ ] athena_workgroup (2 controls)
 - [ ] glue_data_catalog (2 controls)

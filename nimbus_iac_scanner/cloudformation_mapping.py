@@ -521,6 +521,65 @@ def _map_redshift_cluster(key: ResourceKey, body: dict[str, Any]) -> dict[str, A
     }
 
 
+# ---------------------------------------------------------------------------
+# SNS topic (NG-AWS-SNS-001; policy_allows_public omitted). SQS queue
+# (NG-AWS-SQS-001; policy omitted). Secrets Manager secret
+# (NG-AWS-SECRETSMANAGER-002; rotation_enabled omitted -- the rotation
+# schedule is a separate AWS::SecretsManager::RotationSchedule resource, and
+# CFN mappers have no cross-resource view). ACM certificate (NG-AWS-ACM-002;
+# days_to_expiry omitted -- a runtime value).
+# ---------------------------------------------------------------------------
+
+def _map_sns_topic(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "sns_topic",
+        "configuration": {"kms_encryption_enabled": bool(properties.get("KmsMasterKeyId"))},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::SNS::Topic.{key[1]}",
+    }
+
+
+def _map_sqs_queue(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    encrypted = bool(properties.get("KmsMasterKeyId")) or bool(properties.get("SqsManagedSseEnabled", False))
+    return {
+        "provider": "aws",
+        "resource_type": "sqs_queue",
+        "configuration": {"encryption_enabled": encrypted},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::SQS::Queue.{key[1]}",
+    }
+
+
+def _map_secretsmanager_secret(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    return {
+        "provider": "aws",
+        "resource_type": "secretsmanager_secret",
+        # rotation_enabled omitted: AWS::SecretsManager::RotationSchedule is a
+        # separate resource, not visible to a per-resource CFN mapper.
+        "configuration": {"encrypted_with_cmk": bool(properties.get("KmsKeyId"))},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::SecretsManager::Secret.{key[1]}",
+    }
+
+
+def _map_acm_certificate(key: ResourceKey, body: dict[str, Any]) -> dict[str, Any]:
+    properties = body.get("Properties") or {}
+    pref = properties.get("CertificateTransparencyLoggingPreference")
+    # AWS default is ENABLED when the property is absent.
+    transparency = True if pref is None else str(pref).upper() != "DISABLED"
+    return {
+        "provider": "aws",
+        "resource_type": "acm_certificate",
+        "configuration": {"transparency_logging_enabled": transparency},
+        "tags": _tags_from_cfn_list(properties.get("Tags")),
+        "identifier": f"AWS::CertificateManager::Certificate.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "AWS::S3::Bucket": _map_s3_bucket,
     "AWS::EC2::SecurityGroup": _map_security_group,
@@ -540,6 +599,10 @@ _MAPPERS = {
     "AWS::ElastiCache::ReplicationGroup": _map_elasticache_replication_group,
     "AWS::ElastiCache::CacheCluster": _map_elasticache_cache_cluster,
     "AWS::Redshift::Cluster": _map_redshift_cluster,
+    "AWS::SNS::Topic": _map_sns_topic,
+    "AWS::SQS::Queue": _map_sqs_queue,
+    "AWS::SecretsManager::Secret": _map_secretsmanager_secret,
+    "AWS::CertificateManager::Certificate": _map_acm_certificate,
 }
 
 

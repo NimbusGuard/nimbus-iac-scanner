@@ -544,6 +544,113 @@ def _map_redshift_cluster(key: ResourceKey, body: dict[str, Any], _all_resources
 
 
 # ---------------------------------------------------------------------------
+# IAM account password policy (NG-AWS-IAM-008/009/010). Direct attributes on
+# aws_iam_account_password_policy. TF defaults confirmed: minimum_password_
+# length 6, require_* false, max_password_age 0 (no expiry). TF spells two of
+# them require_lowercase_characters / require_uppercase_characters; the
+# controls read require_lowercase / require_uppercase. No CloudFormation
+# equivalent (the account password policy is not a CFN resource type).
+# ---------------------------------------------------------------------------
+
+def _map_iam_password_policy(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "iam_password_policy",
+        "configuration": {
+            "minimum_password_length": int(body.get("minimum_password_length", 6)),
+            "require_symbols": bool(body.get("require_symbols", False)),
+            "require_numbers": bool(body.get("require_numbers", False)),
+            "require_lowercase": bool(body.get("require_lowercase_characters", False)),
+            "require_uppercase": bool(body.get("require_uppercase_characters", False)),
+            "max_password_age_days": int(body.get("max_password_age", 0)),
+        },
+        "tags": {},  # the account password policy carries no tags
+        "identifier": f"aws_iam_account_password_policy.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# SNS topic (NG-AWS-SNS-001; 002 policy_allows_public omitted). kms_encryption
+# _enabled = a kms_master_key_id is set. SQS queue (NG-AWS-SQS-001; 002
+# omitted). encryption_enabled = a kms_master_key_id OR sqs_managed_sse.
+# ---------------------------------------------------------------------------
+
+def _map_sns_topic(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "sns_topic",
+        "configuration": {"kms_encryption_enabled": bool(body.get("kms_master_key_id"))},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_sns_topic.{key[1]}",
+    }
+
+
+def _map_sqs_queue(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    encrypted = bool(body.get("kms_master_key_id")) or bool(body.get("sqs_managed_sse_enabled", False))
+    return {
+        "provider": "aws",
+        "resource_type": "sqs_queue",
+        "configuration": {"encryption_enabled": encrypted},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_sqs_queue.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Secrets Manager secret (NG-AWS-SECRETSMANAGER-001/002). encrypted_with_cmk
+# = a customer kms_key_id is set; rotation_enabled correlated from a separate
+# aws_secretsmanager_secret_rotation resource (TF). CFN has no inline rotation
+# on the secret (AWS::SecretsManager::RotationSchedule is separate), so CFN
+# omits rotation_enabled (NOT_EVALUATED).
+# ---------------------------------------------------------------------------
+
+def _secret_rotation_enabled(secret_name: str, all_resources: dict[ResourceKey, dict[str, Any]]) -> bool:
+    for (resource_type, _name), body in all_resources.items():
+        if resource_type != "aws_secretsmanager_secret_rotation":
+            continue
+        ref = resolve_reference(body.get("secret_id"))
+        if (ref is not None and ref[0] == "aws_secretsmanager_secret" and ref[1] == secret_name) \
+                or body.get("secret_id") == secret_name:
+            return True
+    return False
+
+
+def _map_secretsmanager_secret(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "provider": "aws",
+        "resource_type": "secretsmanager_secret",
+        "configuration": {
+            "encrypted_with_cmk": bool(body.get("kms_key_id")),
+            "rotation_enabled": _secret_rotation_enabled(key[1], all_resources),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_secretsmanager_secret.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# ACM certificate (NG-AWS-ACM-002; 001 days_to_expiry omitted -- a runtime
+# value the certificate doesn't have at IaC time). transparency_logging_enabled
+# = the options.certificate_transparency_logging_preference is not "DISABLED"
+# (AWS default is ENABLED, so an absent options block == enabled).
+# ---------------------------------------------------------------------------
+
+def _map_acm_certificate(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    options = _first_block(body, "options")
+    if options is not None and "certificate_transparency_logging_preference" in options:
+        transparency = str(options.get("certificate_transparency_logging_preference")).upper() != "DISABLED"
+    else:
+        transparency = True  # AWS default is ENABLED when unspecified
+    return {
+        "provider": "aws",
+        "resource_type": "acm_certificate",
+        "configuration": {"transparency_logging_enabled": transparency},
+        "tags": body.get("tags") or {},
+        "identifier": f"aws_acm_certificate.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
 # KMS key rotation (NG-AWS-KMS-001) -- `key_manager` is always "CUSTOMER"
 # for a Terraform-declared key (a structural fact: AWS-managed keys are
 # never created as a Terraform resource, they're implicit per-service
@@ -734,6 +841,11 @@ _MAPPERS = {
     "aws_elasticache_replication_group": _map_elasticache_replication_group,
     "aws_elasticache_cluster": _map_elasticache_cluster,
     "aws_redshift_cluster": _map_redshift_cluster,
+    "aws_iam_account_password_policy": _map_iam_password_policy,
+    "aws_sns_topic": _map_sns_topic,
+    "aws_sqs_queue": _map_sqs_queue,
+    "aws_secretsmanager_secret": _map_secretsmanager_secret,
+    "aws_acm_certificate": _map_acm_certificate,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -750,6 +862,7 @@ _CONSUMED_ONLY = {
     "aws_lambda_function_url",  # merged into its function's function_url_auth_none
     "aws_ecr_lifecycle_policy",  # merged into its repo's lifecycle_policy_enabled
     "aws_efs_backup_policy",  # merged into its file system's backup_enabled
+    "aws_secretsmanager_secret_rotation",  # merged into its secret's rotation_enabled
 }
 
 

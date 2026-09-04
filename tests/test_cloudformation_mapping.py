@@ -482,3 +482,59 @@ Resources:
     assert cfg["encrypted"] is True
     assert cfg["audit_logging_enabled"] is True
     assert "publicly_accessible" not in cfg
+
+
+# --- sns / sqs / secretsmanager / acm -------------------------------------
+
+def test_sns_topic_cfn():
+    entry = map_resources(parse_source('''
+Resources:
+  T:
+    Type: AWS::SNS::Topic
+    Properties:
+      KmsMasterKeyId: alias/aws/sns
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {"kms_encryption_enabled": True}
+
+
+def test_sqs_queue_cfn_sse_managed():
+    entry = map_resources(parse_source('''
+Resources:
+  Q:
+    Type: AWS::SQS::Queue
+    Properties:
+      SqsManagedSseEnabled: true
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {"encryption_enabled": True}
+
+
+def test_secretsmanager_secret_cfn_omits_rotation():
+    entry = map_resources(parse_source('''
+Resources:
+  S:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      KmsKeyId: arn:aws:kms:...:key/abc
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert entry["configuration"] == {"encrypted_with_cmk": True}
+    assert "rotation_enabled" not in entry["configuration"]
+
+
+def test_acm_certificate_cfn_default_enabled_and_disabled():
+    default = map_resources(parse_source('''
+Resources:
+  C:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: example.com
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert default["configuration"] == {"transparency_logging_enabled": True}
+    disabled = map_resources(parse_source('''
+Resources:
+  C:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: example.com
+      CertificateTransparencyLoggingPreference: DISABLED
+''', is_yaml=True, file_key="t.yaml"))[0]
+    assert disabled["configuration"] == {"transparency_logging_enabled": False}
