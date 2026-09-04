@@ -18,13 +18,31 @@ del control (evaluation-engine) + docs del proveedor, sin adivinar.
 
 | Métrica | Valor |
 |---|---|
-| Commits locales (sin push) | **17** |
-| Tipos mapeados en Terraform (aws_ + azurerm_) | **50 entradas** |
+| Commits locales (sin push) | **20** |
+| Tipos mapeados en Terraform (aws_ + azurerm_) | **59 entradas** (14 azurerm) |
 | Tipos mapeados en CloudFormation | **39 entradas** |
-| Tipos mapeados en Bicep | **7 entradas** |
-| Tests | **238 passing, 3 skipped** |
-| Tipos del catálogo cerrados | **47** |
-| Tipos abiertos (todos Azure) | **24** |
+| Tipos mapeados en Bicep | **16 entradas** |
+| Tests | **260 passing, 3 skipped** |
+| Tipos del catálogo cerrados | **56** |
+| Tipos abiertos (todos Azure) | **15** |
+
+## ✅ Verificación en vivo end-to-end (contra el app real)
+
+Al final de la corrida, con el app arriba, se verificó el pipeline completo
+**parser → mapper → `POST /iac/gate-check` real → evaluation-engine real → veredicto**
+usando un service account throwaway (`view_findings`, limpiado después). Un fixture
+Terraform con mappers nuevos de esta noche (docdb, sns, kinesis, key_vault, redis,
+container_registry) devolvió veredictos genuinos, **todos coincidiendo con lo que
+emiten los mappers + los defaults confirmados**:
+- `aws_docdb_cluster.bad` → DOCDB-001 FAIL (sin cifrar) + DOCDB-002 FAIL (retención
+  default 1 < 7); el `.good` cifrado → DOCDB-001 PASA, solo DOCDB-002 falla.
+- kinesis/sns → encryption FAIL; `azurerm_key_vault.bad` → KEYVAULT-002/003/004/005
+  FAIL (purge/public/rbac/logging por defaults); `azurerm_redis_cache.bad` →
+  REDIS-003 FAIL (public network); `azurerm_container_registry.good` → ACR-001/002/003
+  PASAN, solo 004/005 (CMK/retención no seteados) fallan.
+
+Confirma que toda la cadena funciona contra datos reales, no solo los tests unitarios.
+Artefactos throwaway (org/SA/API key) eliminados de la DB tras la verificación.
 
 **Antes de esta corrida:** 8 tipos AWS (s3, security_group, rds, kms, cloudtrail,
 ebs_volume, iam_user, iam_role) en TF+CFN, 2 Bicep parciales sin tests.
