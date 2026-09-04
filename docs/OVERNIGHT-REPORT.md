@@ -18,13 +18,19 @@ del control (evaluation-engine) + docs del proveedor, sin adivinar.
 
 | Métrica | Valor |
 |---|---|
-| Commits locales (sin push) | **20** |
-| Tipos mapeados en Terraform (aws_ + azurerm_) | **59 entradas** (14 azurerm) |
+| Commits locales (sin push) | **31** |
+| Tipos mapeados en Terraform (aws_ + azurerm_) | **77 entradas** (~28 azurerm) |
 | Tipos mapeados en CloudFormation | **39 entradas** |
-| Tipos mapeados en Bicep | **16 entradas** |
-| Tests | **260 passing, 3 skipped** |
-| Tipos del catálogo cerrados | **56** |
-| Tipos abiertos (todos Azure) | **15** |
+| Tipos mapeados en Bicep | **25 entradas** |
+| Tests | **304 passing, 3 skipped** |
+| Tipos del catálogo cerrados | **71 (100%)** |
+| Tipos abiertos | **0** |
+
+> **CATÁLOGO COMPLETO** — todos los tipos de recurso AWS y Azure con controles
+> derivables desde IaC están mapeados en Terraform (aws_ + azurerm_), CloudFormation
+> (AWS) y Bicep (Azure, donde los campos son inline). Cada tipo con campos genuinamente
+> no-derivables (runtime, cross-resource multi-hop, content-scan) está documentado
+> con su razón de omisión/skip en `docs/PROGRESS.md` y en los mensajes de commit.
 
 ## ✅ Verificación en vivo end-to-end (contra el app real)
 
@@ -42,7 +48,16 @@ emiten los mappers + los defaults confirmados**:
   PASAN, solo 004/005 (CMK/retención no seteados) fallan.
 
 Confirma que toda la cadena funciona contra datos reales, no solo los tests unitarios.
-Artefactos throwaway (org/SA/API key) eliminados de la DB tras la verificación.
+
+**2ª verificación en vivo (Azure completo)** — un fixture con los tipos azurerm
+grandes (storage_account, sql_server, aks_cluster, virtual_machine) devolvió 35 FAIL
+genuinos, todos coincidiendo: aks.bad → AKS-001/003/004/005/006/007; vm.bad →
+VM-002/004/005/007/008/012; sql.bad → SQL-001/002/003/004/007/008/011/012;
+storage.bad → 10 controles; y storage.good (endurecido) → STORAGE-001/005/009/011/014
+ahora PASAN, solo fallan los campos de recurso-hijo no seteados. Cada veredicto
+coincide con lo que emite el mapper + su default confirmado.
+
+Artefactos throwaway (org/SA/API key) eliminados de la DB tras cada verificación.
 
 **Antes de esta corrida:** 8 tipos AWS (s3, security_group, rds, kms, cloudtrail,
 ebs_volume, iam_user, iam_role) en TF+CFN, 2 Bicep parciales sin tests.
