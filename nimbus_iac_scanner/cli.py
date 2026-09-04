@@ -29,7 +29,7 @@ from nimbus_iac_scanner.mr_comment import MrCommentError, find_merge_request_iid
 from nimbus_iac_scanner.mr_comment import post_or_update_comment as post_or_update_mr_comment
 from nimbus_iac_scanner.pr_comment import PrCommentError, find_pull_request_number
 from nimbus_iac_scanner.pr_comment import post_or_update_comment as post_or_update_pr_comment
-from nimbus_iac_scanner.reporter import format_report, should_fail_build
+from nimbus_iac_scanner.reporter import format_markdown_report, format_report, should_fail_build
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -157,6 +157,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
+    # Plain text for the terminal / CI log; markdown (a rendered table) for
+    # the PR/MR comment -- a code-host comment renders markdown, a terminal
+    # doesn't.
     report = format_report(result.results, unmapped)
     print(report)
     if result.scan_ids:
@@ -164,10 +167,12 @@ def main(argv: list[str] | None = None) -> int:
         # one line, informational, never affects the exit code.
         print(f"\nRecorded in NimbusGuard: scan {', '.join(result.scan_ids)}", file=sys.stderr)
 
-    if args.post_pr_comment:
-        _try_post_pr_comment(report)
-    if args.post_mr_comment:
-        _try_post_mr_comment(report)
+    if args.post_pr_comment or args.post_mr_comment:
+        markdown_report = format_markdown_report(result.results, unmapped)
+        if args.post_pr_comment:
+            _try_post_pr_comment(markdown_report)
+        if args.post_mr_comment:
+            _try_post_mr_comment(markdown_report)
 
     # Precedence: an explicit --min-severity flag (local intent) always
     # wins; otherwise the org's central block policy from the platform

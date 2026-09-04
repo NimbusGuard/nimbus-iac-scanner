@@ -60,3 +60,49 @@ def test_format_report_notes_unmapped_resource_types():
 def test_format_report_with_no_unmapped_types_has_no_note_section():
     report = format_report([{"status": "PASS"}], unmapped_resource_types=set())
     assert "mapped to a nimbus_app control" not in report
+
+
+# --- format_markdown_report (the PR/MR comment body) ---
+from nimbus_iac_scanner.reporter import format_markdown_report
+
+
+def _fail(identifier, control_id, severity, message, control_name="rule"):
+    return {"status": "FAIL", "identifier": identifier, "control_id": control_id,
+            "severity": severity, "message": message, "control_name": control_name}
+
+
+def test_markdown_passing_has_a_check_and_no_table():
+    md = format_markdown_report([{"status": "PASS"}], set())
+    assert "✅" in md and "Passed" in md
+    assert "| Severity |" not in md  # no findings table when nothing fails
+
+
+def test_markdown_failing_has_summary_counts_and_a_worst_first_table():
+    results = [
+        _fail("aws_s3_bucket.a", "NG-AWS-S3-001", "CRITICAL", "S3 bucket allows public access"),
+        _fail("aws_kms_key.k", "NG-AWS-KMS-001", "LOW", "rotation disabled"),
+        _fail("aws_security_group.sg", "NG-AWS-EC2-001", "HIGH", "SSH open"),
+        {"status": "PASS"},
+    ]
+    md = format_markdown_report(results, set())
+    # blocking summary with the real failing count (3), passes excluded
+    assert "Blocking — 3 findings" in md
+    # a severity-count table with badges
+    assert "🔴 Critical" in md and "🟠 High" in md and "🔵 Low" in md
+    # a real findings table, collapsible, with code-formatted resource + control
+    assert "| Severity | Resource | Control | Issue |" in md
+    assert "`aws_s3_bucket.a`" in md and "`NG-AWS-S3-001`" in md
+    assert "<details" in md and "</details>" in md
+    # worst-first: CRITICAL row appears before the HIGH row, which precedes LOW
+    assert md.index("NG-AWS-S3-001") < md.index("NG-AWS-EC2-001") < md.index("NG-AWS-KMS-001")
+
+
+def test_markdown_escapes_pipes_in_cells():
+    md = format_markdown_report([_fail("res|x", "NG-A|B", "MEDIUM", "a | b message")], set())
+    # a literal pipe inside a cell is escaped so it can't start a new column
+    assert "res\\|x" in md and "a \\| b message" in md
+
+
+def test_markdown_notes_unmapped_types():
+    md = format_markdown_report([_fail("r", "C", "LOW", "m")], {"aws_foo", "azurerm_bar"})
+    assert "2 resource type(s) aren't mapped" in md

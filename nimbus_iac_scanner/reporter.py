@@ -64,3 +64,76 @@ def format_report(results: list[dict[str, Any]], unmapped_resource_types: set[st
             lines.append(f"  - {rt}")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# GitHub/GitLab-flavored markdown report -- used ONLY for the PR/MR comment
+# (see cli.py). The plain-text `format_report` above stays the terminal/CI-log
+# output; a code-host comment renders markdown, so a wall of text there reads
+# as noise. This produces a summary badge line, a severity-count table, and
+# the full findings as a real, worst-first table inside a collapsible section
+# (the same shape CodeQL/Dependabot/tfsec comments use).
+# ---------------------------------------------------------------------------
+
+_SEVERITY_BADGE = {
+    "CRITICAL": "🔴 Critical",
+    "HIGH": "🟠 High",
+    "MEDIUM": "🟡 Medium",
+    "LOW": "🔵 Low",
+    "INFORMATIONAL": "⚪ Info",
+}
+_SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL"]
+
+
+def _md_cell(value: Any) -> str:
+    """Make a value safe to drop into a markdown table cell: a literal
+    `|` would start a new column and a newline would break the row."""
+    return str(value if value is not None else "").replace("|", "\\|").replace("\n", " ").strip()
+
+
+def format_markdown_report(results: list[dict[str, Any]], unmapped_resource_types: set[str]) -> str:
+    from collections import Counter
+
+    failing = [r for r in results if r.get("status") == "FAIL"]
+
+    if not failing:
+        out = ["**✅ Passed** — no misconfigurations found in the evaluated resources."]
+        if unmapped_resource_types:
+            out += ["", f"<sub>{len(unmapped_resource_types)} resource type(s) aren't mapped to a control yet and were not evaluated.</sub>"]
+        return "\n".join(out)
+
+    counts = Counter(r.get("severity") or "UNKNOWN" for r in failing)
+    present = [s for s in _SEVERITY_ORDER if counts.get(s)]
+
+    out: list[str] = [
+        f"**❌ Blocking — {len(failing)} finding{'s' if len(failing) != 1 else ''}** "
+        f"({len(results)} checks evaluated).",
+        "",
+    ]
+    if present:
+        out.append("| " + " | ".join(_SEVERITY_BADGE[s] for s in present) + " |")
+        out.append("|" + "|".join([":--:"] * len(present)) + "|")
+        out.append("| " + " | ".join(f"**{counts[s]}**" for s in present) + " |")
+        out.append("")
+
+    def sort_key(r: dict[str, Any]) -> tuple:
+        return (-SEVERITY_RANK.get(r.get("severity"), -1), r.get("identifier") or "", r.get("control_id") or "")
+
+    out.append(f"<details open><summary><b>View all {len(failing)} findings</b></summary>")
+    out.append("")
+    out.append("| Severity | Resource | Control | Issue |")
+    out.append("|:--|:--|:--|:--|")
+    for r in sorted(failing, key=sort_key):
+        sev = r.get("severity") or "UNKNOWN"
+        badge = _SEVERITY_BADGE.get(sev, sev)
+        issue = r.get("message") or r.get("control_name") or ""
+        out.append(
+            f"| {badge} | `{_md_cell(r.get('identifier') or '—')}` "
+            f"| `{_md_cell(r.get('control_id') or '—')}` | {_md_cell(issue)} |"
+        )
+    out += ["", "</details>"]
+
+    if unmapped_resource_types:
+        out += ["", f"<sub>{len(unmapped_resource_types)} resource type(s) aren't mapped to a control yet and were not evaluated.</sub>"]
+
+    return "\n".join(out)
