@@ -1,0 +1,1320 @@
+{
+ "aws:security_group": {
+  "n_controls": 16,
+  "required_fields": [
+   "configuration.ingress_rules",
+   "configuration.is_default"
+  ],
+  "controls": [
+   "NG-AWS-EC2-001",
+   "NG-AWS-EC2-002",
+   "NG-AWS-EC2-003",
+   "NG-AWS-EC2-004",
+   "NG-AWS-EC2-005",
+   "NG-AWS-EC2-006",
+   "NG-AWS-EC2-007",
+   "NG-AWS-EC2-013",
+   "NG-AWS-EC2-014",
+   "NG-AWS-EC2-015",
+   "NG-AWS-EC2-016",
+   "NG-AWS-EC2-017",
+   "NG-AWS-EC2-018",
+   "NG-AWS-EC2-019",
+   "NG-AWS-EC2-020",
+   "NG-AWS-EC2-022"
+  ]
+ },
+ "aws:ebs_volume": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.encrypted"
+  ],
+  "controls": [
+   "NG-AWS-EC2-008"
+  ]
+ },
+ "aws:ebs_snapshot": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.encrypted",
+   "configuration.publicly_shared"
+  ],
+  "controls": [
+   "NG-AWS-EC2-009",
+   "NG-AWS-EC2-025"
+  ]
+ },
+ "aws:ec2_instance": {
+  "n_controls": 6,
+  "required_fields": [
+   "configuration.detailed_monitoring_enabled",
+   "configuration.metadata_options",
+   "configuration.public_ip_address",
+   "configuration.secrets_detected",
+   "configuration.ssm_managed"
+  ],
+  "controls": [
+   "NG-AWS-EC2-010",
+   "NG-AWS-EC2-011",
+   "NG-AWS-EC2-023",
+   "NG-AWS-EC2-026",
+   "NG-AWS-EC2-027",
+   "NG-AWS-EC2-028"
+  ]
+ },
+ "aws:ami": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.public"
+  ],
+  "controls": [
+   "NG-AWS-EC2-012"
+  ]
+ },
+ "aws:s3_bucket": {
+  "n_controls": 12,
+  "required_fields": [
+   "configuration.access_logging_enabled",
+   "configuration.acls_disabled",
+   "configuration.allows_cross_account_access",
+   "configuration.encryption",
+   "configuration.enforces_https",
+   "configuration.lifecycle_enabled",
+   "configuration.mfa_delete_enabled",
+   "configuration.object_lock_enabled",
+   "configuration.public_access_block",
+   "configuration.replication_enabled",
+   "configuration.versioning_enabled"
+  ],
+  "controls": [
+   "NG-AWS-S3-001",
+   "NG-AWS-S3-002",
+   "NG-AWS-S3-003",
+   "NG-AWS-S3-004",
+   "NG-AWS-S3-005",
+   "NG-AWS-S3-006",
+   "NG-AWS-S3-007",
+   "NG-AWS-S3-008",
+   "NG-AWS-S3-009",
+   "NG-AWS-S3-010",
+   "NG-AWS-S3-011",
+   "NG-AWS-S3-012"
+  ]
+ },
+ "aws:iam_user": {
+  "n_controls": 7,
+  "required_fields": [
+   "configuration.access_analyzer_findings",
+   "configuration.access_keys",
+   "configuration.attached_policies",
+   "configuration.console_access_enabled",
+   "configuration.inline_policies",
+   "configuration.mfa_enabled"
+  ],
+  "controls": [
+   "NG-AWS-IAM-001",
+   "NG-AWS-IAM-002",
+   "NG-AWS-IAM-003",
+   "NG-AWS-IAM-004",
+   "NG-AWS-IAM-005",
+   "NG-AWS-IAM-016",
+   "NG-AWS-IAM-018"
+  ]
+ },
+ "aws:iam_root_account": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.access_keys_exist",
+   "configuration.mfa_enabled"
+  ],
+  "controls": [
+   "NG-AWS-IAM-006",
+   "NG-AWS-IAM-007"
+  ]
+ },
+ "aws:iam_password_policy": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.max_password_age_days",
+   "configuration.minimum_password_length",
+   "configuration.require_lowercase",
+   "configuration.require_numbers",
+   "configuration.require_symbols",
+   "configuration.require_uppercase"
+  ],
+  "controls": [
+   "NG-AWS-IAM-008",
+   "NG-AWS-IAM-009",
+   "NG-AWS-IAM-010"
+  ]
+ },
+ "aws:iam_role": {
+  "n_controls": 5,
+  "required_fields": [
+   "configuration.access_analyzer_findings",
+   "configuration.attached_policies",
+   "configuration.created_days_ago",
+   "configuration.inline_policies",
+   "configuration.trust_allows_cross_account_without_external_id",
+   "configuration.trust_policy_allows_any_principal"
+  ],
+  "controls": [
+   "NG-AWS-IAM-011",
+   "NG-AWS-IAM-012",
+   "NG-AWS-IAM-013",
+   "NG-AWS-IAM-014",
+   "NG-AWS-IAM-019"
+  ]
+ },
+ "aws:rds_instance": {
+  "n_controls": 11,
+  "required_fields": [
+   "configuration.auto_minor_version_upgrade",
+   "configuration.backup_retention_period",
+   "configuration.cloudwatch_logs_exports_enabled",
+   "configuration.deletion_protection_enabled",
+   "configuration.engine",
+   "configuration.enhanced_monitoring_enabled",
+   "configuration.iam_database_authentication_enabled",
+   "configuration.multi_az",
+   "configuration.port",
+   "configuration.publicly_accessible",
+   "configuration.storage_encrypted",
+   "configuration.transport_encryption_enabled"
+  ],
+  "controls": [
+   "NG-AWS-RDS-001",
+   "NG-AWS-RDS-002",
+   "NG-AWS-RDS-003",
+   "NG-AWS-RDS-004",
+   "NG-AWS-RDS-005",
+   "NG-AWS-RDS-006",
+   "NG-AWS-RDS-007",
+   "NG-AWS-RDS-008",
+   "NG-AWS-RDS-009",
+   "NG-AWS-RDS-011",
+   "NG-AWS-RDS-012"
+  ]
+ },
+ "aws:rds_snapshot": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.encrypted",
+   "configuration.publicly_accessible"
+  ],
+  "controls": [
+   "NG-AWS-RDS-010",
+   "NG-AWS-RDS-013"
+  ]
+ },
+ "aws:cloudtrail_trail": {
+  "n_controls": 7,
+  "required_fields": [
+   "configuration.cloudwatch_logs_integration_enabled",
+   "configuration.is_logging",
+   "configuration.is_multi_region_trail",
+   "configuration.kms_encryption_enabled",
+   "configuration.log_file_validation_enabled",
+   "configuration.s3_bucket_public",
+   "configuration.s3_data_events_enabled"
+  ],
+  "controls": [
+   "NG-AWS-CLOUDTRAIL-001",
+   "NG-AWS-CLOUDTRAIL-002",
+   "NG-AWS-CLOUDTRAIL-003",
+   "NG-AWS-CLOUDTRAIL-004",
+   "NG-AWS-CLOUDTRAIL-005",
+   "NG-AWS-CLOUDTRAIL-006",
+   "NG-AWS-CLOUDTRAIL-007"
+  ]
+ },
+ "aws:kms_key": {
+  "n_controls": 4,
+  "required_fields": [
+   "configuration.in_use",
+   "configuration.key_manager",
+   "configuration.pending_deletion",
+   "configuration.publicly_accessible"
+  ],
+  "controls": [
+   "NG-AWS-KMS-001",
+   "NG-AWS-KMS-002",
+   "NG-AWS-KMS-003",
+   "NG-AWS-KMS-004"
+  ]
+ },
+ "aws:load_balancer": {
+  "n_controls": 7,
+  "required_fields": [
+   "configuration.access_logs_enabled",
+   "configuration.deletion_protection_enabled",
+   "configuration.scheme",
+   "configuration.type"
+  ],
+  "controls": [
+   "NG-AWS-ELB-001",
+   "NG-AWS-ELB-002",
+   "NG-AWS-ELB-003",
+   "NG-AWS-ELB-004",
+   "NG-AWS-ELB-005",
+   "NG-AWS-ELB-006",
+   "NG-AWS-ELB-007"
+  ]
+ },
+ "aws:eks_cluster": {
+  "n_controls": 5,
+  "required_fields": [
+   "configuration.enabled_log_types",
+   "configuration.endpoint_private_access",
+   "configuration.endpoint_public_access",
+   "configuration.secrets_encryption_enabled",
+   "configuration.version"
+  ],
+  "controls": [
+   "NG-AWS-EKS-001",
+   "NG-AWS-EKS-002",
+   "NG-AWS-EKS-003",
+   "NG-AWS-EKS-004",
+   "NG-AWS-EKS-005"
+  ]
+ },
+ "aws:ecs_cluster": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.container_insights_enabled"
+  ],
+  "controls": [
+   "NG-AWS-ECS-001"
+  ]
+ },
+ "aws:lambda_function": {
+  "n_controls": 6,
+  "required_fields": [
+   "configuration.env_encrypted_with_cmk",
+   "configuration.function_url_auth_none",
+   "configuration.resource_policy_allows_public",
+   "configuration.runtime",
+   "configuration.secrets_detected",
+   "configuration.xray_tracing_enabled"
+  ],
+  "controls": [
+   "NG-AWS-AWSLAMBDA-001",
+   "NG-AWS-AWSLAMBDA-002",
+   "NG-AWS-AWSLAMBDA-003",
+   "NG-AWS-AWSLAMBDA-004",
+   "NG-AWS-AWSLAMBDA-005",
+   "NG-AWS-AWSLAMBDA-006"
+  ]
+ },
+ "aws:dynamodb_table": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.deletion_protection_enabled",
+   "configuration.encrypted_with_cmk",
+   "configuration.pitr_enabled"
+  ],
+  "controls": [
+   "NG-AWS-DYNAMODB-001",
+   "NG-AWS-DYNAMODB-002",
+   "NG-AWS-DYNAMODB-003"
+  ]
+ },
+ "aws:efs_file_system": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.backup_enabled",
+   "configuration.encrypted",
+   "configuration.policy_allows_anonymous_access"
+  ],
+  "controls": [
+   "NG-AWS-EFS-001",
+   "NG-AWS-EFS-002",
+   "NG-AWS-EFS-003"
+  ]
+ },
+ "aws:sns_topic": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.kms_encryption_enabled",
+   "configuration.policy_allows_public"
+  ],
+  "controls": [
+   "NG-AWS-SNS-001",
+   "NG-AWS-SNS-002"
+  ]
+ },
+ "aws:sqs_queue": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.encryption_enabled",
+   "configuration.policy_allows_public"
+  ],
+  "controls": [
+   "NG-AWS-SQS-001",
+   "NG-AWS-SQS-002"
+  ]
+ },
+ "aws:ecr_repository": {
+  "n_controls": 4,
+  "required_fields": [
+   "configuration.lifecycle_policy_enabled",
+   "configuration.policy_allows_public",
+   "configuration.scan_on_push_enabled",
+   "configuration.tag_immutability_enabled"
+  ],
+  "controls": [
+   "NG-AWS-ECR-001",
+   "NG-AWS-ECR-002",
+   "NG-AWS-ECR-003",
+   "NG-AWS-ECR-004"
+  ]
+ },
+ "aws:secretsmanager_secret": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.encrypted_with_cmk",
+   "configuration.rotation_enabled"
+  ],
+  "controls": [
+   "NG-AWS-SECRETSMANAGER-001",
+   "NG-AWS-SECRETSMANAGER-002"
+  ]
+ },
+ "aws:vpc": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.flow_logs_enabled"
+  ],
+  "controls": [
+   "NG-AWS-VPC-001"
+  ]
+ },
+ "aws:subnet": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.map_public_ip_on_launch"
+  ],
+  "controls": [
+   "NG-AWS-VPC-002"
+  ]
+ },
+ "aws:elasticache_cluster": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.at_rest_encryption_enabled",
+   "configuration.auto_minor_version_upgrade",
+   "configuration.transit_encryption_enabled"
+  ],
+  "controls": [
+   "NG-AWS-ELASTICACHE-001",
+   "NG-AWS-ELASTICACHE-002",
+   "NG-AWS-ELASTICACHE-003"
+  ]
+ },
+ "aws:redshift_cluster": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.audit_logging_enabled",
+   "configuration.encrypted",
+   "configuration.publicly_accessible"
+  ],
+  "controls": [
+   "NG-AWS-REDSHIFT-001",
+   "NG-AWS-REDSHIFT-002",
+   "NG-AWS-REDSHIFT-003"
+  ]
+ },
+ "aws:cloudfront_distribution": {
+  "n_controls": 4,
+  "required_fields": [
+   "configuration.access_logging_enabled",
+   "configuration.minimum_tls_1_2",
+   "configuration.origin_access_controlled",
+   "configuration.viewer_https_enforced"
+  ],
+  "controls": [
+   "NG-AWS-CLOUDFRONT-001",
+   "NG-AWS-CLOUDFRONT-002",
+   "NG-AWS-CLOUDFRONT-003",
+   "NG-AWS-CLOUDFRONT-004"
+  ]
+ },
+ "aws:api_gateway_stage": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.execution_logging_enabled",
+   "configuration.waf_attached",
+   "configuration.xray_tracing_enabled"
+  ],
+  "controls": [
+   "NG-AWS-APIGATEWAY-001",
+   "NG-AWS-APIGATEWAY-002",
+   "NG-AWS-APIGATEWAY-003"
+  ]
+ },
+ "aws:guardduty_detector": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.enabled"
+  ],
+  "controls": [
+   "NG-AWS-GUARDDUTY-001"
+  ]
+ },
+ "aws:config_recorder": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.recording_enabled"
+  ],
+  "controls": [
+   "NG-AWS-CONFIG-001"
+  ]
+ },
+ "aws:s3_account_settings": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.account_public_access_block_enabled"
+  ],
+  "controls": [
+   "NG-AWS-S3-013"
+  ]
+ },
+ "aws:ec2_account_settings": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.ebs_default_encryption_enabled"
+  ],
+  "controls": [
+   "NG-AWS-EC2-021"
+  ]
+ },
+ "aws:network_acl": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.entries"
+  ],
+  "controls": [
+   "NG-AWS-EC2-024"
+  ]
+ },
+ "aws:iam_account_settings": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.no_expired_server_certificates",
+   "configuration.support_role_exists"
+  ],
+  "controls": [
+   "NG-AWS-IAM-015",
+   "NG-AWS-IAM-017"
+  ]
+ },
+ "aws:cloudwatch_metric_alarms": {
+  "n_controls": 15,
+  "required_fields": [
+   "configuration.alarm_cloudtrail_config_changes",
+   "configuration.alarm_cmk_deletion",
+   "configuration.alarm_config_changes",
+   "configuration.alarm_console_auth_failures",
+   "configuration.alarm_console_signin_no_mfa",
+   "configuration.alarm_iam_policy_changes",
+   "configuration.alarm_nacl_changes",
+   "configuration.alarm_network_gateway_changes",
+   "configuration.alarm_organizations_changes",
+   "configuration.alarm_root_usage",
+   "configuration.alarm_route_table_changes",
+   "configuration.alarm_s3_policy_changes",
+   "configuration.alarm_security_group_changes",
+   "configuration.alarm_unauthorized_api_calls",
+   "configuration.alarm_vpc_changes"
+  ],
+  "controls": [
+   "NG-AWS-CLOUDWATCH-001",
+   "NG-AWS-CLOUDWATCH-002",
+   "NG-AWS-CLOUDWATCH-003",
+   "NG-AWS-CLOUDWATCH-004",
+   "NG-AWS-CLOUDWATCH-005",
+   "NG-AWS-CLOUDWATCH-006",
+   "NG-AWS-CLOUDWATCH-007",
+   "NG-AWS-CLOUDWATCH-008",
+   "NG-AWS-CLOUDWATCH-009",
+   "NG-AWS-CLOUDWATCH-010",
+   "NG-AWS-CLOUDWATCH-011",
+   "NG-AWS-CLOUDWATCH-012",
+   "NG-AWS-CLOUDWATCH-013",
+   "NG-AWS-CLOUDWATCH-014",
+   "NG-AWS-CLOUDWATCH-015"
+  ]
+ },
+ "aws:securityhub_account": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.enabled"
+  ],
+  "controls": [
+   "NG-AWS-SECURITYHUB-001"
+  ]
+ },
+ "aws:accessanalyzer_status": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.enabled",
+   "configuration.unused_access_enabled"
+  ],
+  "controls": [
+   "NG-AWS-ACCESSANALYZER-001",
+   "NG-AWS-ACCESSANALYZER-002"
+  ]
+ },
+ "aws:acm_certificate": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.days_to_expiry",
+   "configuration.transparency_logging_enabled"
+  ],
+  "controls": [
+   "NG-AWS-ACM-001",
+   "NG-AWS-ACM-002"
+  ]
+ },
+ "aws:route53_hosted_zone": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.query_logging_enabled"
+  ],
+  "controls": [
+   "NG-AWS-ROUTE53-001"
+  ]
+ },
+ "aws:waf_web_acl": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.has_rules",
+   "configuration.logging_enabled"
+  ],
+  "controls": [
+   "NG-AWS-WAF-001",
+   "NG-AWS-WAF-002"
+  ]
+ },
+ "aws:kinesis_stream": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.encryption_enabled"
+  ],
+  "controls": [
+   "NG-AWS-KINESIS-001"
+  ]
+ },
+ "aws:firehose_delivery_stream": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.encryption_enabled"
+  ],
+  "controls": [
+   "NG-AWS-FIREHOSE-001"
+  ]
+ },
+ "aws:athena_workgroup": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.enforce_workgroup_configuration",
+   "configuration.results_encryption_enabled"
+  ],
+  "controls": [
+   "NG-AWS-ATHENA-001",
+   "NG-AWS-ATHENA-002"
+  ]
+ },
+ "aws:glue_data_catalog": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.connection_password_encryption_enabled",
+   "configuration.metadata_encryption_enabled"
+  ],
+  "controls": [
+   "NG-AWS-GLUE-001",
+   "NG-AWS-GLUE-002"
+  ]
+ },
+ "aws:sfn_state_machine": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.logging_enabled"
+  ],
+  "controls": [
+   "NG-AWS-SFN-001"
+  ]
+ },
+ "aws:emr_cluster": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.encryption_at_rest_enabled",
+   "configuration.master_public_ip"
+  ],
+  "controls": [
+   "NG-AWS-EMR-001",
+   "NG-AWS-EMR-003"
+  ]
+ },
+ "aws:emr_account_settings": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.block_public_access_enabled"
+  ],
+  "controls": [
+   "NG-AWS-EMR-002"
+  ]
+ },
+ "aws:sagemaker_notebook_instance": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.direct_internet_access_enabled",
+   "configuration.encrypted_with_kms",
+   "configuration.root_access_enabled"
+  ],
+  "controls": [
+   "NG-AWS-SAGEMAKER-001",
+   "NG-AWS-SAGEMAKER-002",
+   "NG-AWS-SAGEMAKER-003"
+  ]
+ },
+ "aws:backup_account_settings": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.backup_plan_exists"
+  ],
+  "controls": [
+   "NG-AWS-BACKUP-001"
+  ]
+ },
+ "aws:backup_vault": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.encrypted_with_cmk"
+  ],
+  "controls": [
+   "NG-AWS-BACKUP-002"
+  ]
+ },
+ "aws:inspector_status": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.enabled"
+  ],
+  "controls": [
+   "NG-AWS-INSPECTOR-001"
+  ]
+ },
+ "aws:cloudformation_stack": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.termination_protection_enabled"
+  ],
+  "controls": [
+   "NG-AWS-CLOUDFORMATION-001"
+  ]
+ },
+ "azure:network_security_group": {
+  "n_controls": 16,
+  "required_fields": [
+   "configuration.flow_logs_enabled",
+   "configuration.rules"
+  ],
+  "controls": [
+   "NG-AZURE-NET-001",
+   "NG-AZURE-NET-002",
+   "NG-AZURE-NET-003",
+   "NG-AZURE-NET-004",
+   "NG-AZURE-NET-005",
+   "NG-AZURE-NET-006",
+   "NG-AZURE-NET-007",
+   "NG-AZURE-NET-009",
+   "NG-AZURE-NET-011",
+   "NG-AZURE-NET-012",
+   "NG-AZURE-NET-013",
+   "NG-AZURE-NET-014",
+   "NG-AZURE-NET-015",
+   "NG-AZURE-NET-016",
+   "NG-AZURE-NET-017",
+   "NG-AZURE-NET-018"
+  ]
+ },
+ "azure:storage_account": {
+  "n_controls": 14,
+  "required_fields": [
+   "configuration.account_replication_type",
+   "configuration.allow_blob_public_access",
+   "configuration.blob_soft_delete_enabled",
+   "configuration.blob_versioning_enabled",
+   "configuration.cross_tenant_replication_enabled",
+   "configuration.diagnostic_logging_enabled",
+   "configuration.encryption",
+   "configuration.infrastructure_encryption_enabled",
+   "configuration.minimum_tls_version",
+   "configuration.network_default_action",
+   "configuration.public_network_access_enabled",
+   "configuration.sas_expiration_policy_set",
+   "configuration.shared_key_access_disabled",
+   "configuration.supports_https_traffic_only"
+  ],
+  "controls": [
+   "NG-AZURE-STORAGE-001",
+   "NG-AZURE-STORAGE-002",
+   "NG-AZURE-STORAGE-003",
+   "NG-AZURE-STORAGE-004",
+   "NG-AZURE-STORAGE-005",
+   "NG-AZURE-STORAGE-006",
+   "NG-AZURE-STORAGE-007",
+   "NG-AZURE-STORAGE-008",
+   "NG-AZURE-STORAGE-009",
+   "NG-AZURE-STORAGE-010",
+   "NG-AZURE-STORAGE-011",
+   "NG-AZURE-STORAGE-013",
+   "NG-AZURE-STORAGE-014",
+   "NG-AZURE-STORAGE-015"
+  ]
+ },
+ "azure:azure_user": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.mfa_enabled",
+   "configuration.role_assignments",
+   "configuration.user_type"
+  ],
+  "controls": [
+   "NG-AZURE-IDENTITY-001",
+   "NG-AZURE-IDENTITY-002",
+   "NG-AZURE-IDENTITY-003"
+  ]
+ },
+ "azure:managed_identity": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.role_assignments"
+  ],
+  "controls": [
+   "NG-AZURE-IDENTITY-004"
+  ]
+ },
+ "azure:key_vault_key": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.expiration_set",
+   "configuration.rotation_policy"
+  ],
+  "controls": [
+   "NG-AZURE-KEYVAULT-001",
+   "NG-AZURE-KEYVAULT-006"
+  ]
+ },
+ "azure:key_vault": {
+  "n_controls": 6,
+  "required_fields": [
+   "configuration.access_policies",
+   "configuration.logging_enabled",
+   "configuration.public_network_access_enabled",
+   "configuration.purge_protection_enabled",
+   "configuration.rbac_authorization_enabled",
+   "configuration.soft_delete_retention_days"
+  ],
+  "controls": [
+   "NG-AZURE-KEYVAULT-002",
+   "NG-AZURE-KEYVAULT-003",
+   "NG-AZURE-KEYVAULT-004",
+   "NG-AZURE-KEYVAULT-005",
+   "NG-AZURE-KEYVAULT-007",
+   "NG-AZURE-KEYVAULT-008"
+  ]
+ },
+ "azure:virtual_machine": {
+  "n_controls": 13,
+  "required_fields": [
+   "configuration.backup_protected",
+   "configuration.boot_diagnostics_enabled",
+   "configuration.disks_encrypted_with_cmk",
+   "configuration.encryption_at_host_enabled",
+   "configuration.guest_configuration_enabled",
+   "configuration.guest_diagnostics_enabled",
+   "configuration.managed_identity_enabled",
+   "configuration.password_authentication_disabled",
+   "configuration.platform_patching_enabled",
+   "configuration.public_ip_attached",
+   "configuration.trusted_launch_enabled",
+   "configuration.uses_managed_disks"
+  ],
+  "controls": [
+   "NG-AZURE-VM-001",
+   "NG-AZURE-VM-002",
+   "NG-AZURE-VM-003",
+   "NG-AZURE-VM-004",
+   "NG-AZURE-VM-005",
+   "NG-AZURE-VM-006",
+   "NG-AZURE-VM-007",
+   "NG-AZURE-VM-008",
+   "NG-AZURE-VM-009",
+   "NG-AZURE-VM-010",
+   "NG-AZURE-VM-011",
+   "NG-AZURE-VM-012",
+   "NG-AZURE-VM-013"
+  ]
+ },
+ "azure:aks_cluster": {
+  "n_controls": 7,
+  "required_fields": [
+   "configuration.control_plane_logging_enabled",
+   "configuration.endpoint_public_access",
+   "configuration.local_accounts_disabled",
+   "configuration.managed_identity_enabled",
+   "configuration.network_policy_enabled",
+   "configuration.policy_addon_enabled",
+   "configuration.rbac_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-AKS-001",
+   "NG-AZURE-AKS-002",
+   "NG-AZURE-AKS-003",
+   "NG-AZURE-AKS-004",
+   "NG-AZURE-AKS-005",
+   "NG-AZURE-AKS-006",
+   "NG-AZURE-AKS-007"
+  ]
+ },
+ "azure:sql_server": {
+  "n_controls": 10,
+  "required_fields": [
+   "configuration.audit_log_destination_configured",
+   "configuration.auditing_enabled",
+   "configuration.azuread_only_authentication_enabled",
+   "configuration.entra_admin_configured",
+   "configuration.firewall_allows_all_networks",
+   "configuration.managed_identity_enabled",
+   "configuration.minimum_tls_1_2",
+   "configuration.public_network_access_enabled",
+   "configuration.tde_with_cmk",
+   "configuration.threat_detection_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-SQL-001",
+   "NG-AZURE-SQL-002",
+   "NG-AZURE-SQL-003",
+   "NG-AZURE-SQL-004",
+   "NG-AZURE-SQL-005",
+   "NG-AZURE-SQL-006",
+   "NG-AZURE-SQL-007",
+   "NG-AZURE-SQL-008",
+   "NG-AZURE-SQL-011",
+   "NG-AZURE-SQL-012"
+  ]
+ },
+ "azure:postgresql_server": {
+  "n_controls": 4,
+  "required_fields": [
+   "configuration.backup_retention_days",
+   "configuration.geo_redundant_backup_enabled",
+   "configuration.public_network_access_enabled",
+   "configuration.ssl_enforced"
+  ],
+  "controls": [
+   "NG-AZURE-POSTGRESQL-001",
+   "NG-AZURE-POSTGRESQL-002",
+   "NG-AZURE-POSTGRESQL-003",
+   "NG-AZURE-POSTGRESQL-004"
+  ]
+ },
+ "azure:mysql_server": {
+  "n_controls": 4,
+  "required_fields": [
+   "configuration.backup_retention_days",
+   "configuration.geo_redundant_backup_enabled",
+   "configuration.public_network_access_enabled",
+   "configuration.ssl_enforced"
+  ],
+  "controls": [
+   "NG-AZURE-MYSQL-001",
+   "NG-AZURE-MYSQL-002",
+   "NG-AZURE-MYSQL-003",
+   "NG-AZURE-MYSQL-004"
+  ]
+ },
+ "azure:cosmosdb_account": {
+  "n_controls": 4,
+  "required_fields": [
+   "configuration.continuous_backup_enabled",
+   "configuration.encrypted_with_cmk",
+   "configuration.local_auth_disabled",
+   "configuration.network_access_restricted"
+  ],
+  "controls": [
+   "NG-AZURE-COSMOSDB-001",
+   "NG-AZURE-COSMOSDB-002",
+   "NG-AZURE-COSMOSDB-003",
+   "NG-AZURE-COSMOSDB-004"
+  ]
+ },
+ "azure:app_service": {
+  "n_controls": 7,
+  "required_fields": [
+   "configuration.client_certs_required",
+   "configuration.ftp_deployments_disabled",
+   "configuration.http2_enabled",
+   "configuration.https_only",
+   "configuration.managed_identity_enabled",
+   "configuration.minimum_tls_1_2",
+   "configuration.secrets_detected"
+  ],
+  "controls": [
+   "NG-AZURE-APPSERVICE-001",
+   "NG-AZURE-APPSERVICE-002",
+   "NG-AZURE-APPSERVICE-003",
+   "NG-AZURE-APPSERVICE-004",
+   "NG-AZURE-APPSERVICE-005",
+   "NG-AZURE-APPSERVICE-006",
+   "NG-AZURE-APPSERVICE-007"
+  ]
+ },
+ "azure:defender_settings": {
+  "n_controls": 7,
+  "required_fields": [
+   "configuration.defender_appservice_enabled",
+   "configuration.defender_containers_enabled",
+   "configuration.defender_keyvault_enabled",
+   "configuration.defender_servers_enabled",
+   "configuration.defender_sql_enabled",
+   "configuration.defender_storage_enabled",
+   "configuration.security_contact_configured"
+  ],
+  "controls": [
+   "NG-AZURE-DEFENDER-001",
+   "NG-AZURE-DEFENDER-002",
+   "NG-AZURE-DEFENDER-003",
+   "NG-AZURE-DEFENDER-004",
+   "NG-AZURE-DEFENDER-005",
+   "NG-AZURE-DEFENDER-006",
+   "NG-AZURE-DEFENDER-007"
+  ]
+ },
+ "azure:monitor_settings": {
+  "n_controls": 9,
+  "required_fields": [
+   "configuration.activity_log_export_enabled",
+   "configuration.alert_keyvault_changes",
+   "configuration.alert_nsg_changes",
+   "configuration.alert_policy_assignment_changes",
+   "configuration.alert_resource_group_changes",
+   "configuration.alert_security_solution_changes",
+   "configuration.alert_sql_firewall_changes",
+   "configuration.alert_storage_changes",
+   "configuration.network_watcher_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-MONITOR-001",
+   "NG-AZURE-MONITOR-002",
+   "NG-AZURE-MONITOR-003",
+   "NG-AZURE-MONITOR-004",
+   "NG-AZURE-MONITOR-005",
+   "NG-AZURE-MONITOR-006",
+   "NG-AZURE-MONITOR-007",
+   "NG-AZURE-MONITOR-008",
+   "NG-AZURE-MONITOR-009"
+  ]
+ },
+ "azure:entra_settings": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.guest_invites_restricted",
+   "configuration.tenant_mfa_enforced",
+   "configuration.user_app_registration_restricted"
+  ],
+  "controls": [
+   "NG-AZURE-ENTRA-001",
+   "NG-AZURE-ENTRA-002",
+   "NG-AZURE-ENTRA-003"
+  ]
+ },
+ "azure:application_gateway": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.diagnostic_logging_enabled",
+   "configuration.minimum_tls_1_2",
+   "configuration.waf_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-APPGATEWAY-001",
+   "NG-AZURE-APPGATEWAY-002",
+   "NG-AZURE-APPGATEWAY-003"
+  ]
+ },
+ "azure:front_door": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.diagnostic_logging_enabled",
+   "configuration.https_redirect_enforced",
+   "configuration.waf_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-FRONTDOOR-001",
+   "NG-AZURE-FRONTDOOR-002",
+   "NG-AZURE-FRONTDOOR-003"
+  ]
+ },
+ "azure:container_registry": {
+  "n_controls": 5,
+  "required_fields": [
+   "configuration.admin_user_enabled",
+   "configuration.anonymous_pull_enabled",
+   "configuration.encrypted_with_cmk",
+   "configuration.public_network_access_enabled",
+   "configuration.retention_policy_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-ACR-001",
+   "NG-AZURE-ACR-002",
+   "NG-AZURE-ACR-003",
+   "NG-AZURE-ACR-004",
+   "NG-AZURE-ACR-005"
+  ]
+ },
+ "azure:service_bus_namespace": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.local_auth_disabled",
+   "configuration.minimum_tls_1_2",
+   "configuration.public_network_access_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-SERVICEBUS-001",
+   "NG-AZURE-SERVICEBUS-002",
+   "NG-AZURE-SERVICEBUS-003"
+  ]
+ },
+ "azure:event_hub_namespace": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.local_auth_disabled",
+   "configuration.public_network_access_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-EVENTHUB-001",
+   "NG-AZURE-EVENTHUB-002"
+  ]
+ },
+ "azure:automation_account": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.local_auth_disabled",
+   "configuration.public_network_access_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-AUTOMATION-001",
+   "NG-AZURE-AUTOMATION-002"
+  ]
+ },
+ "azure:redis_cache": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.minimum_tls_1_2",
+   "configuration.non_ssl_port_enabled",
+   "configuration.public_network_access_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-REDIS-001",
+   "NG-AZURE-REDIS-002",
+   "NG-AZURE-REDIS-003"
+  ]
+ },
+ "azure:log_analytics_workspace": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.retention_days"
+  ],
+  "controls": [
+   "NG-AZURE-LOGANALYTICS-001"
+  ]
+ },
+ "azure:network_settings": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.bastion_host_exists",
+   "configuration.ddos_protection_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-NET-008",
+   "NG-AZURE-NET-019"
+  ]
+ },
+ "azure:subnet": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.nsg_associated"
+  ],
+  "controls": [
+   "NG-AZURE-NET-010"
+  ]
+ },
+ "azure:key_vault_secret": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.expiration_set"
+  ],
+  "controls": [
+   "NG-AZURE-KEYVAULT-009"
+  ]
+ },
+ "azure:storage_container": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.public_access"
+  ],
+  "controls": [
+   "NG-AZURE-STORAGE-012"
+  ]
+ },
+ "azure:sql_database": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.backup_storage_redundancy",
+   "configuration.ledger_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-SQL-009",
+   "NG-AZURE-SQL-010"
+  ]
+ },
+ "azure:managed_disk": {
+  "n_controls": 3,
+  "required_fields": [
+   "configuration.attached",
+   "configuration.network_access_policy",
+   "configuration.public_network_access"
+  ],
+  "controls": [
+   "NG-AZURE-COMPUTE-001",
+   "NG-AZURE-COMPUTE-002",
+   "NG-AZURE-COMPUTE-003"
+  ]
+ },
+ "aws:organizations_settings": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.account_in_organization"
+  ],
+  "controls": [
+   "NG-AWS-ORGANIZATIONS-001"
+  ]
+ },
+ "aws:docdb_cluster": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.backup_retention_period",
+   "configuration.storage_encrypted"
+  ],
+  "controls": [
+   "NG-AWS-DOCDB-001",
+   "NG-AWS-DOCDB-002"
+  ]
+ },
+ "aws:dms_replication_instance": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.publicly_accessible"
+  ],
+  "controls": [
+   "NG-AWS-DMS-001"
+  ]
+ },
+ "aws:mq_broker": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.publicly_accessible"
+  ],
+  "controls": [
+   "NG-AWS-MQ-001"
+  ]
+ },
+ "aws:codebuild_project": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.privileged_mode"
+  ],
+  "controls": [
+   "NG-AWS-CODEBUILD-001"
+  ]
+ },
+ "aws:route53_domain": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.transfer_lock_enabled"
+  ],
+  "controls": [
+   "NG-AWS-ROUTE53-002"
+  ]
+ },
+ "azure:synapse_workspace": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.public_network_access_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-SYNAPSE-001"
+  ]
+ },
+ "aws:*": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.vulnerability_findings"
+  ],
+  "controls": [
+   "NG-AWS-VULN-001"
+  ]
+ },
+ "azure:*": {
+  "n_controls": 1,
+  "required_fields": [
+   "configuration.vulnerability_findings"
+  ],
+  "controls": [
+   "NG-AZURE-VULN-001"
+  ]
+ },
+ "azure:function_app": {
+  "n_controls": 4,
+  "required_fields": [
+   "configuration.https_only",
+   "configuration.minimum_tls_1_2",
+   "configuration.public_network_access_enabled",
+   "configuration.secrets_detected"
+  ],
+  "controls": [
+   "NG-AZURE-FUNCTIONAPP-001",
+   "NG-AZURE-FUNCTIONAPP-002",
+   "NG-AZURE-FUNCTIONAPP-003",
+   "NG-AZURE-FUNCTIONAPP-004"
+  ]
+ },
+ "azure:api_management": {
+  "n_controls": 2,
+  "required_fields": [
+   "configuration.minimum_tls_1_2",
+   "configuration.public_network_access_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-APIMANAGEMENT-001",
+   "NG-AZURE-APIMANAGEMENT-002"
+  ]
+ },
+ "azure:recovery_services_vault": {
+  "n_controls": 4,
+  "required_fields": [
+   "configuration.cmk_encryption_enabled",
+   "configuration.immutability_enabled",
+   "configuration.public_network_access_enabled",
+   "configuration.soft_delete_enabled"
+  ],
+  "controls": [
+   "NG-AZURE-RECOVERYSERVICES-001",
+   "NG-AZURE-RECOVERYSERVICES-002",
+   "NG-AZURE-RECOVERYSERVICES-003",
+   "NG-AZURE-RECOVERYSERVICES-004"
+  ]
+ }
+}
