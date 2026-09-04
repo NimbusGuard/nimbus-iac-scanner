@@ -78,3 +78,52 @@ def test_redis_cache_defaults_omit_version_ambiguous_tls():
     cfg = entry["configuration"]
     assert cfg == {"non_ssl_port_enabled": False, "public_network_access_enabled": True}
     assert "minimum_tls_1_2" not in cfg
+
+
+# --- cosmosdb_account ------------------------------------------------------
+
+def test_cosmosdb_hardened():
+    entry = _one({
+        "type": "Microsoft.DocumentDB/databaseAccounts",
+        "properties": {
+            "publicNetworkAccess": "Disabled", "disableLocalAuth": True,
+            "keyVaultKeyUri": "https://kv.vault.azure.net/keys/k",
+            "backupPolicy": {"type": "Continuous"},
+        },
+    })
+    assert entry["configuration"] == {
+        "network_access_restricted": True, "local_auth_disabled": True,
+        "encrypted_with_cmk": True, "continuous_backup_enabled": True,
+    }
+
+
+def test_cosmosdb_insecure_defaults():
+    entry = _one({"type": "Microsoft.DocumentDB/databaseAccounts", "properties": {}})
+    assert entry["configuration"] == {
+        "network_access_restricted": False, "local_auth_disabled": False,
+        "encrypted_with_cmk": False, "continuous_backup_enabled": False,
+    }
+
+
+# --- postgresql/mysql flexible server (Bicep) -----------------------------
+
+def test_postgresql_flexible_bicep():
+    entry = _one({
+        "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+        "properties": {
+            "network": {"publicNetworkAccess": "Disabled"},
+            "backup": {"geoRedundantBackup": "Enabled", "backupRetentionDays": 30},
+        },
+    })
+    assert entry["resource_type"] == "postgresql_server"
+    assert entry["configuration"] == {
+        "geo_redundant_backup_enabled": True, "backup_retention_days": 30,
+        "public_network_access_enabled": False,
+    }
+    assert "ssl_enforced" not in entry["configuration"]  # separate configurations sub-resource
+
+
+def test_mysql_flexible_bicep_defaults():
+    entry = _one({"type": "Microsoft.DBforMySQL/flexibleServers", "properties": {}})
+    assert entry["resource_type"] == "mysql_server"
+    assert entry["configuration"] == {"geo_redundant_backup_enabled": False, "backup_retention_days": 7}

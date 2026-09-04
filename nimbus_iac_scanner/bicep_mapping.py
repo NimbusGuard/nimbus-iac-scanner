@@ -86,10 +86,67 @@ def _map_redis_cache(key: tuple[str, str], resource: dict[str, Any]) -> dict[str
     }
 
 
+def _map_cosmosdb_account(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    """Microsoft.DocumentDB/databaseAccounts (NG-AZURE-COSMOSDB-001..004)."""
+    properties = resource.get("properties") or {}
+    public_disabled = str(properties.get("publicNetworkAccess", "Enabled")).lower() == "disabled"
+    vnet_filter = bool(properties.get("isVirtualNetworkFilterEnabled", False))
+    ip_rules = bool(properties.get("ipRules"))
+    vnet_rules = bool(properties.get("virtualNetworkRules"))
+    backup = properties.get("backupPolicy") or {}
+    return {
+        "provider": "azure",
+        "resource_type": "cosmosdb_account",
+        "configuration": {
+            "network_access_restricted": public_disabled or vnet_filter or ip_rules or vnet_rules,
+            "local_auth_disabled": bool(properties.get("disableLocalAuth", False)),
+            "encrypted_with_cmk": bool(properties.get("keyVaultKeyUri")),
+            "continuous_backup_enabled": str(backup.get("type") or "").lower() == "continuous",
+        },
+        "tags": resource.get("tags") or {},
+        "identifier": f"Microsoft.DocumentDB/databaseAccounts.{key[1]}",
+    }
+
+
+def _map_flexible_db(key: tuple[str, str], resource: dict[str, Any], resource_type: str, arm_type: str) -> dict[str, Any]:
+    """Microsoft.DBfor{PostgreSQL,MySQL}/flexibleServers (NG-AZURE-*-002/003/
+    004). ssl_enforced (require_secure_transport) is a separate configurations
+    sub-resource with no cross-resource view here, so it's omitted (the TF
+    mapper covers it). publicNetworkAccess lives under properties.network."""
+    properties = resource.get("properties") or {}
+    network = properties.get("network") or {}
+    backup = properties.get("backup") or {}
+    configuration: dict[str, Any] = {
+        "geo_redundant_backup_enabled": str(backup.get("geoRedundantBackup", "Disabled")).lower() == "enabled",
+        "backup_retention_days": int(backup.get("backupRetentionDays", 7)),
+    }
+    pna = network.get("publicNetworkAccess")
+    if pna is not None:
+        configuration["public_network_access_enabled"] = str(pna).lower() != "disabled"
+    return {
+        "provider": "azure",
+        "resource_type": resource_type,
+        "configuration": configuration,
+        "tags": resource.get("tags") or {},
+        "identifier": f"{arm_type}.{key[1]}",
+    }
+
+
+def _map_postgresql_server(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    return _map_flexible_db(key, resource, "postgresql_server", "Microsoft.DBforPostgreSQL/flexibleServers")
+
+
+def _map_mysql_server(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    return _map_flexible_db(key, resource, "mysql_server", "Microsoft.DBforMySQL/flexibleServers")
+
+
 _MAPPERS = {
     "Microsoft.Network/networkSecurityGroups": _map_network_security_group,
     "Microsoft.Storage/storageAccounts": _map_storage_account,
     "Microsoft.Cache/redis": _map_redis_cache,
+    "Microsoft.DocumentDB/databaseAccounts": _map_cosmosdb_account,
+    "Microsoft.DBforPostgreSQL/flexibleServers": _map_postgresql_server,
+    "Microsoft.DBforMySQL/flexibleServers": _map_mysql_server,
 }
 
 

@@ -1513,3 +1513,94 @@ def test_azure_redis_legacy_enable_non_ssl_port_attr():
 resource "azurerm_redis_cache" "r" { name = "r" enable_non_ssl_port = true }
 ''')
     assert map_resources(resources)[0]["configuration"]["non_ssl_port_enabled"] is True
+
+
+# --- azurerm cosmosdb_account (NG-AZURE-COSMOSDB-001..004) -----------------
+
+def test_azure_cosmosdb_hardened():
+    resources = parse_source('''
+resource "azurerm_cosmosdb_account" "c" {
+  name                          = "c"
+  local_authentication_enabled  = false
+  public_network_access_enabled = false
+  key_vault_key_id              = "https://kv.vault.azure.net/keys/k"
+  backup { type = "Continuous" }
+}
+''')
+    assert map_resources(resources)[0]["configuration"] == {
+        "network_access_restricted": True, "local_auth_disabled": True,
+        "encrypted_with_cmk": True, "continuous_backup_enabled": True,
+    }
+
+
+def test_azure_cosmosdb_insecure_defaults():
+    resources = parse_source('resource "azurerm_cosmosdb_account" "c" { name = "c" }')
+    assert map_resources(resources)[0]["configuration"] == {
+        "network_access_restricted": False, "local_auth_disabled": False,
+        "encrypted_with_cmk": False, "continuous_backup_enabled": False,
+    }
+
+
+def test_azure_cosmosdb_vnet_filter_counts_as_restricted():
+    resources = parse_source('''
+resource "azurerm_cosmosdb_account" "c" { name = "c" is_virtual_network_filter_enabled = true }
+''')
+    assert map_resources(resources)[0]["configuration"]["network_access_restricted"] is True
+
+
+# --- azurerm postgresql/mysql flexible server -----------------------------
+
+def test_azure_postgresql_hardened_with_ssl_config():
+    resources = parse_source('''
+resource "azurerm_postgresql_flexible_server" "db" {
+  name                          = "db"
+  public_network_access_enabled = false
+  geo_redundant_backup_enabled  = true
+  backup_retention_days         = 30
+}
+resource "azurerm_postgresql_flexible_server_configuration" "ssl" {
+  name      = "require_secure_transport"
+  server_id = azurerm_postgresql_flexible_server.db.id
+  value     = "on"
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "postgresql_server"][0]
+    assert entry["configuration"] == {
+        "ssl_enforced": True, "public_network_access_enabled": False,
+        "geo_redundant_backup_enabled": True, "backup_retention_days": 30,
+    }
+
+
+def test_azure_postgresql_defaults_ssl_on_public_true_retention_7():
+    resources = parse_source('resource "azurerm_postgresql_flexible_server" "db" { name = "db" }')
+    assert map_resources(resources)[0]["configuration"] == {
+        "ssl_enforced": True, "public_network_access_enabled": True,
+        "geo_redundant_backup_enabled": False, "backup_retention_days": 7,
+    }
+
+
+def test_azure_postgresql_ssl_config_off_and_delegated_subnet_is_private():
+    resources = parse_source('''
+resource "azurerm_postgresql_flexible_server" "db" {
+  name               = "db"
+  delegated_subnet_id = "/subscriptions/s/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/v/subnets/sn"
+}
+resource "azurerm_postgresql_flexible_server_configuration" "ssl" {
+  name      = "require_secure_transport"
+  server_id = azurerm_postgresql_flexible_server.db.id
+  value     = "off"
+}
+''')
+    entry = [e for e in map_resources(resources) if e["resource_type"] == "postgresql_server"][0]
+    assert entry["configuration"]["ssl_enforced"] is False
+    assert entry["configuration"]["public_network_access_enabled"] is False  # VNet-integrated
+
+
+def test_azure_mysql_flexible_maps_to_mysql_server():
+    resources = parse_source('''
+resource "azurerm_mysql_flexible_server" "db" { name = "db" geo_redundant_backup_enabled = true }
+''')
+    entry = map_resources(resources)[0]
+    assert entry["resource_type"] == "mysql_server"
+    assert entry["configuration"]["geo_redundant_backup_enabled"] is True
+    assert entry["configuration"]["ssl_enforced"] is True  # default require_secure_transport ON

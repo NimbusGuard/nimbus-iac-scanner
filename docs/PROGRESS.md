@@ -64,9 +64,9 @@
 - [ ] app_service (7 controls)
 - [ ] key_vault (6 controls)
 - [ ] container_registry (5 controls)
-- [ ] postgresql_server (4 controls)
-- [ ] mysql_server (4 controls)
-- [ ] cosmosdb_account (4 controls)
+- [x] postgresql_server (4 controls) -- azurerm(flexible)+Bicep; ssl via require_secure_transport config (default ON)
+- [x] mysql_server (4 controls) -- azurerm(flexible)+Bicep; ssl via require_secure_transport config (default ON)
+- [x] cosmosdb_account (4 controls) -- azurerm + Bicep
 - [ ] function_app (4 controls)
 - [ ] recovery_services_vault (4 controls)
 - [ ] application_gateway (3 controls)

@@ -842,6 +842,96 @@ def _map_azure_redis_cache(key: ResourceKey, body: dict[str, Any], _all_resource
 
 
 # ---------------------------------------------------------------------------
+# Cosmos DB account (NG-AZURE-COSMOSDB-001/002/003/004). Collector semantics:
+# network_access_restricted = public access disabled OR any IP/VNet rule
+# narrows it; encrypted_with_cmk = a key_vault_key_id is set; local_auth_
+# disabled = NOT local_authentication_enabled (default true -> not disabled);
+# continuous_backup_enabled = a backup block of type "Continuous".
+# ---------------------------------------------------------------------------
+
+def _map_azure_cosmosdb_account(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    public_enabled = bool(body.get("public_network_access_enabled", True))
+    vnet_filter = bool(body.get("is_virtual_network_filter_enabled", False))
+    ip_filter = bool(body.get("ip_range_filter"))
+    vnet_rules = bool(body.get("virtual_network_rule"))
+    backup = _first_block(body, "backup")
+    continuous = backup is not None and str(backup.get("type") or "").lower() == "continuous"
+    return {
+        "provider": "azure",
+        "resource_type": "cosmosdb_account",
+        "configuration": {
+            "network_access_restricted": (not public_enabled) or vnet_filter or ip_filter or vnet_rules,
+            "local_auth_disabled": not bool(body.get("local_authentication_enabled", True)),
+            "encrypted_with_cmk": bool(body.get("key_vault_key_id")),
+            "continuous_backup_enabled": continuous,
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_cosmosdb_account.{key[1]}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# PostgreSQL / MySQL Flexible Server (NG-AZURE-POSTGRESQL/MYSQL-001..004).
+# nimbus_app models these as the flexible-server generation. ssl_enforced
+# comes from the require_secure_transport server parameter -- a separate
+# *_flexible_server_configuration resource; that parameter defaults ON for
+# flexible servers, so absent-config == enforced (a confirmed, stable
+# default, not a guess). public_network_access_enabled defaults true, but a
+# server with a delegated_subnet_id is VNet-integrated and therefore private
+# (avoids a false FAIL on a legitimately-private server). geo_redundant_
+# backup defaults false; backup_retention_days defaults 7.
+# ---------------------------------------------------------------------------
+
+def _flexible_db_ssl_enforced(server_tf_type: str, server_tf_name: str, config_tf_type: str, all_resources: dict[ResourceKey, dict[str, Any]]) -> bool:
+    for (resource_type, _name), config in all_resources.items():
+        if resource_type != config_tf_type:
+            continue
+        if str(config.get("name") or "") != "require_secure_transport":
+            continue
+        ref = resolve_reference(config.get("server_id"))
+        if ref is not None and ref[0] == server_tf_type and ref[1] == server_tf_name:
+            return str(config.get("value") or "").lower() == "on"
+    return True  # require_secure_transport defaults ON for flexible servers
+
+
+def _map_flexible_db(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]], *, resource_type: str, tf_type: str, config_tf_type: str) -> dict[str, Any]:
+    if "public_network_access_enabled" in body:
+        public = bool(body["public_network_access_enabled"])
+    elif body.get("delegated_subnet_id"):
+        public = False  # VNet-integrated -> private
+    else:
+        public = True
+    return {
+        "provider": "azure",
+        "resource_type": resource_type,
+        "configuration": {
+            "ssl_enforced": _flexible_db_ssl_enforced(tf_type, key[1], config_tf_type, all_resources),
+            "public_network_access_enabled": public,
+            "geo_redundant_backup_enabled": bool(body.get("geo_redundant_backup_enabled", False)),
+            "backup_retention_days": int(body.get("backup_retention_days", 7)),
+        },
+        "tags": body.get("tags") or {},
+        "identifier": f"{tf_type}.{key[1]}",
+    }
+
+
+def _map_azure_postgresql_server(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    return _map_flexible_db(
+        key, body, all_resources, resource_type="postgresql_server",
+        tf_type="azurerm_postgresql_flexible_server",
+        config_tf_type="azurerm_postgresql_flexible_server_configuration",
+    )
+
+
+def _map_azure_mysql_server(key: ResourceKey, body: dict[str, Any], all_resources: dict[ResourceKey, dict[str, Any]]) -> dict[str, Any]:
+    return _map_flexible_db(
+        key, body, all_resources, resource_type="mysql_server",
+        tf_type="azurerm_mysql_flexible_server",
+        config_tf_type="azurerm_mysql_flexible_server_configuration",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
 # by the AWS NUMERIC string ("6"=TCP, "-1"=all) -- NOT the name -- so this
@@ -1446,6 +1536,9 @@ _MAPPERS = {
     "aws_route53domains_registered_domain": _map_route53_domain,
     # --- Azure (azurerm) ---
     "azurerm_redis_cache": _map_azure_redis_cache,
+    "azurerm_cosmosdb_account": _map_azure_cosmosdb_account,
+    "azurerm_postgresql_flexible_server": _map_azure_postgresql_server,
+    "azurerm_mysql_flexible_server": _map_azure_mysql_server,
 }
 
 # Resources consumed BY another mapper above (merged into an owning
@@ -1470,6 +1563,8 @@ _CONSUMED_ONLY = {
     "aws_api_gateway_method_settings",  # merged into a stage's execution_logging_enabled
     "aws_wafv2_web_acl_association",  # merged into a stage's waf_attached
     "aws_network_acl_rule",  # merged into its NACL's entries
+    "azurerm_postgresql_flexible_server_configuration",  # merged into ssl_enforced
+    "azurerm_mysql_flexible_server_configuration",  # merged into ssl_enforced
 }
 
 
