@@ -144,8 +144,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"({len(unmapped)} unrecognized resource type(s) found)")
         return 0
 
+    # Tell the platform HOW this scan ran, so its finding lifecycle can
+    # reconcile safely: scan_path is the --path scope, is_partial is True
+    # for a --changed-only run (which must never auto-resolve findings).
+    source = collect_ci_source()
+    source["scan_path"] = args.path
+    source["is_partial"] = bool(args.changed_only)
+
     try:
-        result = run_gate_check(args.api_url, args.api_key, mapped, source=collect_ci_source())
+        result = run_gate_check(args.api_url, args.api_key, mapped, source=source)
     except GateCheckError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
