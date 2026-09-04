@@ -72,7 +72,7 @@
 - [ ] application_gateway (3 controls)
 - [ ] front_door (3 controls)
 - [ ] service_bus_namespace (3 controls)
-- [ ] redis_cache (3 controls)
+- [x] redis_cache (3 controls) -- azurerm + Bicep; minimum_tls omitted when absent (version-ambiguous default)
 - [ ] managed_disk (3 controls)
 - [ ] key_vault_key (2 controls)
 - [ ] event_hub_namespace (2 controls)

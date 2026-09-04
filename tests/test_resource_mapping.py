@@ -1479,3 +1479,37 @@ resource "aws_route53domains_registered_domain" "d" { domain_name = "example.com
     assert map_resources(parse_source('''
 resource "aws_route53domains_registered_domain" "d" { domain_name = "example.com" transfer_lock = false }
 '''))[0]["configuration"] == {"transfer_lock_enabled": False}
+
+
+# --- azurerm redis_cache (NG-AZURE-REDIS-001/002/003) ---------------------
+
+def test_azure_redis_hardened():
+    resources = parse_source('''
+resource "azurerm_redis_cache" "r" {
+  name                          = "r"
+  minimum_tls_version           = "1.2"
+  non_ssl_port_enabled          = false
+  public_network_access_enabled = false
+}
+''')
+    entry = map_resources(resources)[0]
+    assert entry["provider"] == "azure"
+    assert entry["resource_type"] == "redis_cache"
+    assert entry["configuration"] == {
+        "non_ssl_port_enabled": False, "public_network_access_enabled": False, "minimum_tls_1_2": True,
+    }
+
+
+def test_azure_redis_defaults_omit_version_ambiguous_tls():
+    resources = parse_source('resource "azurerm_redis_cache" "r" { name = "r" }')
+    cfg = map_resources(resources)[0]["configuration"]
+    # non_ssl default false, public-network default true (both stable azurerm defaults)
+    assert cfg == {"non_ssl_port_enabled": False, "public_network_access_enabled": True}
+    assert "minimum_tls_1_2" not in cfg  # version-ambiguous default -> NOT_EVALUATED
+
+
+def test_azure_redis_legacy_enable_non_ssl_port_attr():
+    resources = parse_source('''
+resource "azurerm_redis_cache" "r" { name = "r" enable_non_ssl_port = true }
+''')
+    assert map_resources(resources)[0]["configuration"]["non_ssl_port_enabled"] is True

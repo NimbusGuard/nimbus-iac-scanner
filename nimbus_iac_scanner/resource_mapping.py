@@ -805,6 +805,42 @@ def _map_athena_workgroup(key: ResourceKey, body: dict[str, Any], _all_resources
     }
 
 
+# ===========================================================================
+# Azure (Terraform azurerm provider). provider="azure". Defaults confirmed
+# against the azurerm provider's own current docs (fetched live), never
+# guessed; a version-ambiguous default (one that has changed across provider
+# major versions and could flip a verdict) is OMITTED when the attribute is
+# absent, exactly like the AWS-side redshift publicly_accessible case.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Redis cache (NG-AZURE-REDIS-001/002/003). azurerm defaults (current docs):
+# non_ssl_port_enabled false (stable), public_network_access_enabled true
+# (stable). minimum_tls_version's default changed 1.0 -> 1.2 across provider
+# versions, so minimum_tls_1_2 is OMITTED when the attribute is absent
+# (would be a false PASS on an older provider).
+# ---------------------------------------------------------------------------
+
+def _map_azure_redis_cache(key: ResourceKey, body: dict[str, Any], _all_resources) -> dict[str, Any]:
+    configuration: dict[str, Any] = {
+        # both the current (non_ssl_port_enabled) and legacy
+        # (enable_non_ssl_port) attribute names, both default false
+        "non_ssl_port_enabled": bool(
+            body.get("non_ssl_port_enabled", body.get("enable_non_ssl_port", False))
+        ),
+        "public_network_access_enabled": bool(body.get("public_network_access_enabled", True)),
+    }
+    if "minimum_tls_version" in body:
+        configuration["minimum_tls_1_2"] = str(body.get("minimum_tls_version") or "") >= "1.2"
+    return {
+        "provider": "azure",
+        "resource_type": "redis_cache",
+        "configuration": configuration,
+        "tags": body.get("tags") or {},
+        "identifier": f"azurerm_redis_cache.{key[1]}",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Network ACL (NG-AWS-EC2-024). The control reads configuration.entries as
 # the flattened rule list from describe_network_acls, and matches protocol
@@ -1408,6 +1444,8 @@ _MAPPERS = {
     "aws_api_gateway_stage": _map_api_gateway_stage,
     "aws_network_acl": _map_network_acl,
     "aws_route53domains_registered_domain": _map_route53_domain,
+    # --- Azure (azurerm) ---
+    "azurerm_redis_cache": _map_azure_redis_cache,
 }
 
 # Resources consumed BY another mapper above (merged into an owning

@@ -65,9 +65,31 @@ def _map_storage_account(key: tuple[str, str], resource: dict[str, Any]) -> dict
     }
 
 
+def _map_redis_cache(key: tuple[str, str], resource: dict[str, Any]) -> dict[str, Any]:
+    """Microsoft.Cache/redis (NG-AZURE-REDIS-001/002/003). publicNetworkAccess
+    defaults "Enabled" and enableNonSslPort defaults false (stable); the
+    minimum TLS version's default is version-ambiguous, so minimum_tls_1_2 is
+    omitted when minimumTlsVersion is absent (a false PASS otherwise)."""
+    properties = resource.get("properties") or {}
+    configuration: dict[str, Any] = {
+        "non_ssl_port_enabled": bool(properties.get("enableNonSslPort", False)),
+        "public_network_access_enabled": str(properties.get("publicNetworkAccess", "Enabled")).lower() != "disabled",
+    }
+    if "minimumTlsVersion" in properties:
+        configuration["minimum_tls_1_2"] = str(properties.get("minimumTlsVersion") or "") >= "1.2"
+    return {
+        "provider": "azure",
+        "resource_type": "redis_cache",
+        "configuration": configuration,
+        "tags": resource.get("tags") or {},
+        "identifier": f"Microsoft.Cache/redis.{key[1]}",
+    }
+
+
 _MAPPERS = {
     "Microsoft.Network/networkSecurityGroups": _map_network_security_group,
     "Microsoft.Storage/storageAccounts": _map_storage_account,
+    "Microsoft.Cache/redis": _map_redis_cache,
 }
 
 
