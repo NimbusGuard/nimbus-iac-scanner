@@ -130,6 +130,21 @@ def _resource_link(
     return f"[{code}]({blob_base}/{quote(file)}{anchor})"
 
 
+def _fix_in_pr_cell(result: dict[str, Any]) -> str:
+    """A one-click "fix this in the PR" link (2026-09-26) -- nimbus_app
+    mints `fix_in_pr_url` on a gate-check result ONLY when the org has AI
+    IaC remediation enabled, a github_pr connector is mapped for this
+    repository, and this run is genuinely PR-triggered; absent for
+    everything else, so this renders a real, working link or nothing at
+    all -- never a broken/placeholder one. A plain markdown link (not a
+    shields.io badge image) on purpose: no external image dependency for
+    every single row of a table that can have dozens of findings, and
+    GitHub already renders a markdown link as clickable, colored text
+    inside a table cell -- reads as an action without needing an image."""
+    url = result.get("fix_in_pr_url")
+    return f"[🔧 Fix with AI]({url})" if url else ""
+
+
 def format_markdown_report(
     results: list[dict[str, Any]],
     unmapped_resource_types: set[str],
@@ -141,6 +156,11 @@ def format_markdown_report(
     all_fail = [r for r in results if r.get("status") == "FAIL"]
     blocking = [r for r in all_fail if not r.get("excepted")]
     ignored = [r for r in all_fail if r.get("excepted")]
+    # The column itself only appears when at least one blocking finding
+    # actually has a link -- an org with AI remediation off (the common
+    # case until a customer opts in) never shows an empty "Fix" column
+    # nobody can use.
+    show_fix_column = any(r.get("fix_in_pr_url") for r in blocking)
 
     def sort_key(r: dict[str, Any]) -> tuple:
         return (-SEVERITY_RANK.get(r.get("severity"), -1), r.get("identifier") or "", r.get("control_id") or "")
@@ -185,17 +205,24 @@ def format_markdown_report(
 
     out.append(f"<details><summary><b>View all {len(blocking)} findings</b></summary>")
     out.append("")
-    out.append("| Severity | Resource | Control | Issue |")
-    out.append("|:--|:--|:--|:--|")
+    if show_fix_column:
+        out.append("| Severity | Resource | Control | Issue | Fix |")
+        out.append("|:--|:--|:--|:--|:--|")
+    else:
+        out.append("| Severity | Resource | Control | Issue |")
+        out.append("|:--|:--|:--|:--|")
     for r in sorted(blocking, key=sort_key):
         sev = r.get("severity") or "UNKNOWN"
         badge = _SEVERITY_BADGE.get(sev, sev)
         issue = r.get("message") or r.get("control_name") or ""
         resource = _resource_link(r.get("identifier"), source_by_identifier, blob_base)
-        out.append(
+        row = (
             f"| {badge} | {resource} "
             f"| `{_md_cell(r.get('control_id') or '—')}` | {_md_cell(issue)} |"
         )
+        if show_fix_column:
+            row += f" {_fix_in_pr_cell(r)} |"
+        out.append(row)
     out += ["", "</details>"]
     out += _ignored_section()
     out += _unmapped_note()

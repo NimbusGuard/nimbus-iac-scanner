@@ -169,3 +169,60 @@ def test_markdown_excepted_fail_is_not_blocking_and_in_ignored_section():
     assert "✅ Passed" in md            # no BLOCKING finding
     assert "1 ignored" in md
     assert "false_positive via inline" in md
+
+
+# --- fix_in_pr_url: the one-click "fix this in the PR" link (2026-09-26) ---
+
+def _fail_with_fix(identifier, control_id, severity, message, fix_in_pr_url):
+    row = _fail(identifier, control_id, severity, message)
+    row["fix_in_pr_url"] = fix_in_pr_url
+    return row
+
+
+def test_markdown_shows_a_fix_column_when_a_finding_has_a_link():
+    results = [_fail_with_fix("aws_kms_key.k", "NG-AWS-KMS-001", "LOW", "rotation disabled", "https://api.nimbusguard.io/v1/iac/finding-states/abc/fix-in-pr-link?token=xyz")]
+    md = format_markdown_report(results, set())
+    assert "| Severity | Resource | Control | Issue | Fix |" in md
+    assert "[🔧 Fix with AI](https://api.nimbusguard.io/v1/iac/finding-states/abc/fix-in-pr-link?token=xyz)" in md
+
+
+def test_markdown_omits_the_fix_column_when_no_finding_has_a_link():
+    """The common case until an org opts into AI IaC remediation -- no
+    empty "Fix" column nobody can use."""
+    results = [_fail("aws_kms_key.k", "NG-AWS-KMS-001", "LOW", "rotation disabled")]
+    md = format_markdown_report(results, set())
+    assert "| Severity | Resource | Control | Issue |" in md
+    assert "Fix |" not in md
+    assert "Fix with AI" not in md
+
+
+def test_markdown_fix_column_present_with_an_empty_cell_for_findings_without_a_link():
+    """Only SOME findings are AI-remediable (e.g. GitHub-only, or the run
+    isn't PR-triggered for every resource) -- once the column exists
+    (because at least one row has a link), a row without one gets a
+    blank cell, never a broken placeholder link."""
+    results = [
+        _fail_with_fix("aws_kms_key.k", "NG-AWS-KMS-001", "CRITICAL", "rotation disabled", "https://api.nimbusguard.io/fix/1"),
+        _fail("aws_s3_bucket.a", "NG-AWS-S3-001", "LOW", "public access"),
+    ]
+    md = format_markdown_report(results, set())
+    assert "[🔧 Fix with AI](https://api.nimbusguard.io/fix/1)" in md
+    # the second row's own line ends with an empty Fix cell, not a link
+    lines = [l for l in md.splitlines() if "NG-AWS-S3-001" in l]
+    assert len(lines) == 1
+    assert "Fix with AI" not in lines[0]
+    assert lines[0].rstrip().endswith("|")
+
+
+def test_markdown_fix_link_never_shown_for_an_excepted_finding():
+    """An excepted FAIL never blocks and lives in its own "ignored"
+    section, which has no Fix column at all -- fixing something the org
+    already decided not to act on doesn't belong there."""
+    results = [{
+        "identifier": "aws_s3_bucket.legacy", "control_id": "NG-AWS-S3-001",
+        "control_name": "S3 public access", "status": "FAIL", "severity": "CRITICAL",
+        "excepted": True, "exception_reason": "false_positive", "exception_source": "inline",
+        "fix_in_pr_url": "https://api.nimbusguard.io/fix/should-not-appear",
+    }]
+    md = format_markdown_report(results, set())
+    assert "should-not-appear" not in md
