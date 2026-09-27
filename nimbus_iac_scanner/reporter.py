@@ -140,9 +140,14 @@ def _fix_in_pr_cell(result: dict[str, Any]) -> str:
     shields.io badge image) on purpose: no external image dependency for
     every single row of a table that can have dozens of findings, and
     GitHub already renders a markdown link as clickable, colored text
-    inside a table cell -- reads as an action without needing an image."""
+    inside a table cell -- reads as an action without needing an image.
+    Link text is deliberately just "Fix" (not "Fix with AI") -- live-
+    verified 2026-09-27 against a real GitHub PR comment: the longer text
+    wraps onto 3 lines in the narrow Fix column GitHub renders for this
+    table shape, which reads as broken/ugly even though it's functional;
+    "Fix" alone reliably renders on one line."""
     url = result.get("fix_in_pr_url")
-    return f"[🔧 Fix with AI]({url})" if url else ""
+    return f"[🔧 Fix]({url})" if url else ""
 
 
 def format_markdown_report(

@@ -183,7 +183,7 @@ def test_markdown_shows_a_fix_column_when_a_finding_has_a_link():
     results = [_fail_with_fix("aws_kms_key.k", "NG-AWS-KMS-001", "LOW", "rotation disabled", "https://api.nimbusguard.io/v1/iac/finding-states/abc/fix-in-pr-link?token=xyz")]
     md = format_markdown_report(results, set())
     assert "| Severity | Resource | Control | Issue | Fix |" in md
-    assert "[🔧 Fix with AI](https://api.nimbusguard.io/v1/iac/finding-states/abc/fix-in-pr-link?token=xyz)" in md
+    assert "[🔧 Fix](https://api.nimbusguard.io/v1/iac/finding-states/abc/fix-in-pr-link?token=xyz)" in md
 
 
 def test_markdown_omits_the_fix_column_when_no_finding_has_a_link():
@@ -193,7 +193,7 @@ def test_markdown_omits_the_fix_column_when_no_finding_has_a_link():
     md = format_markdown_report(results, set())
     assert "| Severity | Resource | Control | Issue |" in md
     assert "Fix |" not in md
-    assert "Fix with AI" not in md
+    assert "[🔧 Fix]" not in md
 
 
 def test_markdown_fix_column_present_with_an_empty_cell_for_findings_without_a_link():
@@ -206,11 +206,11 @@ def test_markdown_fix_column_present_with_an_empty_cell_for_findings_without_a_l
         _fail("aws_s3_bucket.a", "NG-AWS-S3-001", "LOW", "public access"),
     ]
     md = format_markdown_report(results, set())
-    assert "[🔧 Fix with AI](https://api.nimbusguard.io/fix/1)" in md
+    assert "[🔧 Fix](https://api.nimbusguard.io/fix/1)" in md
     # the second row's own line ends with an empty Fix cell, not a link
     lines = [l for l in md.splitlines() if "NG-AWS-S3-001" in l]
     assert len(lines) == 1
-    assert "Fix with AI" not in lines[0]
+    assert "[🔧 Fix]" not in lines[0]
     assert lines[0].rstrip().endswith("|")
 
 
