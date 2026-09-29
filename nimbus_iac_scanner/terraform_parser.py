@@ -33,7 +33,7 @@ from nimbus_iac_scanner import source_location
 _REFERENCE_PREFIX = "${"
 _REFERENCE_SUFFIX = "}"
 
-# A real, previously-unresolved gap found live 2026-09-30: a tag value
+# A real, previously-unresolved gap found live 2026-09-29: a tag value
 # declared as `Name = "${var.prefix}-cwpp-fixtures"` (or the bare,
 # unwrapped `Name = var.prefix` shorthand -- confirmed via direct
 # python-hcl2 introspection that BOTH shapes normalize to the identical

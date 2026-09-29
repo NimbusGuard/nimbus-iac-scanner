@@ -89,7 +89,7 @@ def test_parse_directory_only_files_restricts_to_the_given_files(tmp_path):
 
 
 # --------------------------------------------------------------------------
-# Variable resolution -- a real gap found live 2026-09-30: a tag value like
+# Variable resolution -- a real gap found live 2026-09-29: a tag value like
 # `Name = "${var.prefix}-suffix"` used to reach nimbus_app completely
 # unresolved, silently defeating Ownership Resolution Phase 2's own
 # tag-based correlation (a declared tag that could never match the real,
