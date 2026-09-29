@@ -17,6 +17,7 @@ module included) is built against. 4.3.5 is the last release before
 that shift and gives the standard, predictable shape this module's own
 tests assert against directly."""
 import io
+import re
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,66 @@ from nimbus_iac_scanner import source_location
 _REFERENCE_PREFIX = "${"
 _REFERENCE_SUFFIX = "}"
 
+# A real, previously-unresolved gap found live 2026-09-30: a tag value
+# declared as `Name = "${var.prefix}-cwpp-fixtures"` (or the bare,
+# unwrapped `Name = var.prefix` shorthand -- confirmed via direct
+# python-hcl2 introspection that BOTH shapes normalize to the identical
+# "${var.prefix}..." string, so one substitution handles both) used to
+# reach nimbus_app's own gate-check payload completely unresolved,
+# meaning it could NEVER tag-match a real, already-deployed resource's
+# own resolved tag value -- silently defeating Ownership Resolution
+# Phase 2's own tag-based correlation (and, for a control that reads a
+# tag/attribute value directly rather than just comparing it, this same
+# gap could just as easily have produced a wrong PASS/FAIL). Only a
+# variable with a real, STATIC `default` declared in a `variable` block
+# is ever resolved -- one needing a real tfvars file or a `-var` CLI
+# override this scanner has no way to know about is left exactly as
+# written, same "omit, don't fabricate" discipline resolve_reference()
+# below already established for resource-to-resource references.
+_VAR_REFERENCE_RE = re.compile(r"\$\{\s*var\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}")
+
+
+def parse_variable_defaults(text: str) -> dict[str, Any]:
+    """Every `variable` block's own declared `default` in one file's raw
+    HCL text -- a variable with no `default` at all is simply omitted,
+    never guessed at (it may still be intentionally left unresolved
+    everywhere it's referenced, which resolve_variable_references below
+    handles by leaving the reference untouched)."""
+    parsed = hcl2.loads(text)
+    defaults: dict[str, Any] = {}
+    for block in parsed.get("variable", []):
+        for name, body in block.items():
+            if isinstance(body, dict) and "default" in body:
+                defaults[name] = body["default"]
+    return defaults
+
+
+def resolve_variable_references(value: Any, variables: dict[str, Any]) -> Any:
+    """Recursively substitutes every `${var.NAME}` occurrence found in
+    any string within `value` (a resource body's own nested dict/list
+    structure -- most importantly its `tags` map) using `variables`'
+    own declared defaults. A reference to an undeclared variable, or one
+    with no known default, is left exactly as written -- never guessed,
+    matching resolve_reference()'s own "a value that isn't confidently
+    resolvable resolves to leaving it alone" posture. Only a scalar
+    default (str/int/float/bool) is substituted; a default that's itself
+    a list/map/object has no single string representation that would be
+    honest to splice into an interpolated string, so a reference to one
+    of those is also left untouched."""
+    if isinstance(value, dict):
+        return {k: resolve_variable_references(v, variables) for k, v in value.items()}
+    if isinstance(value, list):
+        return [resolve_variable_references(v, variables) for v in value]
+    if isinstance(value, str):
+        def _substitute(match: "re.Match[str]") -> str:
+            name = match.group(1)
+            default = variables.get(name)
+            if isinstance(default, (str, int, float, bool)):
+                return str(default)
+            return match.group(0)
+        return _VAR_REFERENCE_RE.sub(_substitute, value)
+    return value
+
 
 def parse_directory(path: str, only_files: "set[str] | None" = None) -> dict[tuple[str, str], dict[str, Any]]:
     """Every `*.tf` file under `path` (recursively), merged into one flat
@@ -45,17 +106,34 @@ def parse_directory(path: str, only_files: "set[str] | None" = None) -> dict[tup
     rather than filtering resources afterwards: the Terraform key is
     (resource_type, resource_name), the source file isn't retained past
     parsing, so the only correct way to scope by file is to not parse the
-    unchanged files at all."""
+    unchanged files at all.
+
+    Variable defaults are collected from EVERY `*.tf` file under `path`
+    in a real first pass, regardless of `only_files` -- a `variable`
+    block commonly lives in its own file (e.g. `variables.tf`), which a
+    narrow --changed-only run may not itself include, and that file
+    being unchanged doesn't make its own already-declared defaults any
+    less real. Resource parsing (the second pass) still honors
+    `only_files` exactly as before -- only which RESOURCES get scanned
+    is scoped by it, never which variables can be used to resolve them."""
+    all_tf_files = sorted(Path(path).rglob("*.tf"))
+    variables: dict[str, Any] = {}
+    for tf_file in all_tf_files:
+        with open(tf_file, encoding="utf-8") as f:
+            variables.update(parse_variable_defaults(f.read()))
+
     resources: dict[tuple[str, str], dict[str, Any]] = {}
-    for tf_file in sorted(Path(path).rglob("*.tf")):
+    for tf_file in all_tf_files:
         if only_files is not None and str(tf_file.resolve()) not in only_files:
             continue
         with open(tf_file, encoding="utf-8") as f:
             text = f.read()
         file_resources = parse_source(text)
         for (resource_type, resource_name), body in file_resources.items():
+            resolved_body = resolve_variable_references(body, variables)
+            file_resources[(resource_type, resource_name)] = resolved_body
             source_location.attach(
-                body, str(tf_file),
+                resolved_body, str(tf_file),
                 source_location.terraform_decl_line(text, resource_type, resource_name),
             )
         resources.update(file_resources)
