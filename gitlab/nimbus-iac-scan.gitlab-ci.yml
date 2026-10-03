@@ -34,7 +34,13 @@
     NIMBUS_IAC_SCAN_PATH: "."
     NIMBUS_MIN_SEVERITY: ""
   before_script:
-    - pip install "git+https://github.com/NimbusGuard/nimbus-iac-scanner.git@main"
+    # Pinned to a full SHA, never @main (F-CICD-01). A customer following this
+    # template installs and RUNS this package in their own pipeline with their
+    # own secrets - "@main" means whatever lands on our default branch executes
+    # there, audited or not, including anything an attacker pushed. A tag would
+    # read better; this repo has no tags yet and cutting a release scheme is a
+    # separate decision, so the SHA is what closes the security hole today.
+    - pip install "git+https://github.com/NimbusGuard/nimbus-iac-scanner.git@5a6e3471581ae8935062a304deab8cabc90fcc7e"
     # Confirmed live against Microsoft's own current docs (Install Bicep
     # tools -> Install manually -> Linux) -- needed only if the project
     # being scanned has real .bicep files; harmless (a small, one-time

@@ -123,8 +123,15 @@ as a `warning:` line.
 
 ## GitHub Actions
 
+> **Pin to a commit, not to a branch.** The example below uses a full SHA on
+> purpose. `@main` would mean this Action runs in your pipeline, with your
+> secrets, at whatever state our default branch happens to be in — including a
+> commit none of us has reviewed yet. That advice applies to every third-party
+> Action you use, not just ours. Update the SHA deliberately; a bot like
+> Dependabot or Renovate can open that update as a reviewable PR.
+
 ```yaml
-- uses: NimbusGuard/nimbus-iac-scanner@main
+- uses: NimbusGuard/nimbus-iac-scanner@5a6e3471581ae8935062a304deab8cabc90fcc7e
   with:
     api-url: https://your-nimbusguard-instance/v1
     api-key: ${{ secrets.NIMBUS_API_KEY }}
