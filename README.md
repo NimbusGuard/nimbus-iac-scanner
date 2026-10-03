@@ -148,7 +148,7 @@ you have no `.bicep` files or already install it yourself).
 
 ```yaml
 include:
-  - remote: 'https://raw.githubusercontent.com/NimbusGuard/nimbus-iac-scanner/main/gitlab/nimbus-iac-scan.gitlab-ci.yml'
+  - remote: 'https://raw.githubusercontent.com/NimbusGuard/nimbus-iac-scanner/967136ee34914bf3802a4ac7e68b25181b405b3b/gitlab/nimbus-iac-scan.gitlab-ci.yml'
 
 nimbus-iac-scan:
   extends: .nimbus-iac-scan
