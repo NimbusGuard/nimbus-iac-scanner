@@ -1,7 +1,14 @@
 # Include this in a customer's own .gitlab-ci.yml:
 #
 #   include:
-#     - remote: 'https://raw.githubusercontent.com/NimbusGuard/nimbus-iac-scanner/main/gitlab/nimbus-iac-scan.gitlab-ci.yml'
+#     - remote: 'https://raw.githubusercontent.com/NimbusGuard/nimbus-iac-scanner/a0dfc5d577a2d8902800d6d741dbebfccb2064ec/gitlab/nimbus-iac-scan.gitlab-ci.yml'
+#
+# Pinned to a full SHA rather than /main/ (F-CICD-01). `include: remote:` fetches
+# this file and GitLab runs it, so a floating ref means our default branch
+# decides what executes in the customer's pipeline. This specific SHA is the
+# first commit where the file it fetches is ITSELF pinned - at the previous one
+# the template still installed the package from @main, so pinning the include
+# there would have handed over a pinned wrapper around an unpinned payload.
 #
 #   nimbus-iac-scan:
 #     extends: .nimbus-iac-scan
