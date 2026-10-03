@@ -39,7 +39,22 @@
     # tools -> Install manually -> Linux) -- needed only if the project
     # being scanned has real .bicep files; harmless (a small, one-time
     # download) otherwise.
-    - curl -Lo /usr/local/bin/bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+    #
+    # Pinned version plus checksum, same as action.yml and for the same reason:
+    # this template runs in a CUSTOMER's pipeline with the customer's secrets,
+    # so an unpinned binary fetched and executed there is their exposure, not
+    # ours. The finding that prompted this (F-CICD-02's P3 sibling) named
+    # action.yml and test.yml but not this file, which had the identical
+    # problem.
+    #
+    # The digest is one we computed - Azure ships no checksum file with these
+    # releases - verified by downloading the artifact via both "latest/download"
+    # and the explicit tag and confirming an identical sha256. See the longer
+    # note in action.yml before bumping it.
+    - BICEP_VERSION="v0.47.16"
+    - BICEP_SHA256="64c345a58e0c3e48b1bc98a4e62d6b3adb1d238281297de3400aeafb2697aa5a"
+    - curl -fLo /usr/local/bin/bicep "https://github.com/Azure/bicep/releases/download/${BICEP_VERSION}/bicep-linux-x64"
+    - echo "${BICEP_SHA256}  /usr/local/bin/bicep" | sha256sum -c -
     - chmod +x /usr/local/bin/bicep
   script:
     - |

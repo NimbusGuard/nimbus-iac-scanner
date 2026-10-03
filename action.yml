@@ -50,8 +50,29 @@ runs:
       # Download to $RUNNER_TEMP, NEVER a bare `bicep` in the checkout: a repo
       # that organizes its Bicep under a `bicep/` directory (very common) would
       # otherwise collide -- `curl -Lo bicep` fails with "Is a directory".
+      #
+      # Pinned version plus checksum rather than "latest/download". A public
+      # Action that fetches an unpinned binary and runs it hands whoever controls
+      # that URL arbitrary code execution in every caller's pipeline, with their
+      # secrets in the environment. "latest" also means a caller's build can
+      # change behaviour on a day they changed nothing.
+      #
+      # ONE HONEST CAVEAT, because it changes what this checksum proves: Azure
+      # publishes NO checksum file with these releases - 0 of the 39 assets on
+      # v0.47.16. So this digest is one we computed ourselves, verified by
+      # downloading the artifact twice (once via latest/download, once via the
+      # explicit tag) and confirming both gave the same sha256 and an ELF x86-64
+      # Linux executable. That makes it a trust-on-first-use pin: it detects the
+      # binary at this URL changing under us, which is the realistic attack, but
+      # it is NOT verification against a vendor-published digest. Re-derive it
+      # the same way when bumping the version; do not copy a hash from anywhere
+      # that is not the artifact itself.
       run: |
-        curl -Lo "$RUNNER_TEMP/bicep" https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+        BICEP_VERSION="v0.47.16"
+        BICEP_SHA256="64c345a58e0c3e48b1bc98a4e62d6b3adb1d238281297de3400aeafb2697aa5a"
+        curl -fLo "$RUNNER_TEMP/bicep" \
+          "https://github.com/Azure/bicep/releases/download/${BICEP_VERSION}/bicep-linux-x64"
+        echo "${BICEP_SHA256}  $RUNNER_TEMP/bicep" | sha256sum -c -
         chmod +x "$RUNNER_TEMP/bicep"
         sudo mv "$RUNNER_TEMP/bicep" /usr/local/bin/bicep
 

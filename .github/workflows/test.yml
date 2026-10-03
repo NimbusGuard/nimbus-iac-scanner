@@ -17,9 +17,19 @@ jobs:
       # Real bicep CLI so tests/test_bicep_parser.py's own compile-based
       # tests actually run here instead of skipping -- same manual-install
       # method documented in this repo's own action.yml/gitlab template.
+      # Pinned and checksummed like action.yml and the GitLab template. The
+      # exposure here is smaller than in those two - this runs in OUR CI, not a
+      # customer's - but an unpinned binary executed in the job that decides
+      # whether this repo's tests pass is still a place where someone else
+      # controlling that URL gets to influence the result, and a floating
+      # "latest" can also break the build on a day nobody changed anything.
+      # Keep the three in step: same version, same digest, bumped together.
       - name: Install bicep CLI
         run: |
-          curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          BICEP_VERSION="v0.47.16"
+          BICEP_SHA256="64c345a58e0c3e48b1bc98a4e62d6b3adb1d238281297de3400aeafb2697aa5a"
+          curl -fLo bicep "https://github.com/Azure/bicep/releases/download/${BICEP_VERSION}/bicep-linux-x64"
+          echo "${BICEP_SHA256}  bicep" | sha256sum -c -
           chmod +x ./bicep
           sudo mv ./bicep /usr/local/bin/bicep
       - run: python -m pytest -q
